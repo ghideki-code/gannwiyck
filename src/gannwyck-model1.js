@@ -2,7 +2,7 @@
 (function(root){'use strict';
 const EPS=1e-12;
 const finite=v=>Number.isFinite(Number(v));
-function normalizeCandles(candles){return(candles||[]).map((c,i)=>({index:i,time:c.time??c.timestamp??i,open:+c.open,high:+c.high,low:+c.low,close:+c.close,volume:finite(c.volume)?+c.volume:null})).filter(c=>[c.open,c.high,c.low,c.close].every(finite));}
+function normalizeCandles(candles){return(candles||[]).map((c,i)=>({index:Number.isInteger(c.index)?c.index:i,time:c.time??c.timestamp??i,open:+c.open,high:+c.high,low:+c.low,close:+c.close,volume:finite(c.volume)?+c.volume:null})).filter(c=>[c.open,c.high,c.low,c.close].every(finite));}
 function detectTrend(cs,lookback=20){if(cs.length<3)return'unknown';const n=Math.min(lookback,cs.length-1),a=cs[cs.length-1-n].close,b=cs.at(-1).close;if(b>a*1.002)return'up';if(b<a*.998)return'down';return'range';}
 function findRange(cs,trend,lookback=80){const s=Math.max(0,cs.length-lookback),a=cs.slice(s);if(!a.length)return null;let hi=a[0],lo=a[0];for(const c of a){if(c.high>hi.high)hi=c;if(c.low<lo.low)lo=c}const rangeHigh=hi.high,rangeLow=lo.low,range=rangeHigh-rangeLow;if(!(range>EPS))return null;return{trend,rangeHigh,rangeLow,range,highIndex:hi.index,lowIndex:lo.index,midpoint:rangeLow+range*.5};}
 function calculateDL(r){const R=r.range;return{upper:r.rangeLow+R*1.35,zero:r.rangeLow,lower:r.rangeLow-R*.35,upperFromHigh:r.rangeHigh+R*.35};}
