@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GannWyck Model 1 Lab</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+:root{font-family:Inter,system-ui,sans-serif;background:#0b0e13;color:#e7edf5}body{margin:0}.top{padding:18px 22px;border-bottom:1px solid #252b35;display:flex;gap:16px;align-items:center;flex-wrap:wrap}.title{font-size:20px;font-weight:800}.muted{color:#8d98a8;font-size:12px}.controls{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}select,button{background:#151a22;color:#e7edf5;border:1px solid #303846;border-radius:8px;padding:9px 11px}button{cursor:pointer}.layout{display:grid;grid-template-columns:1fr 360px;height:calc(100vh - 73px)}#chart{min-height:0}.panel{border-left:1px solid #252b35;padding:16px;overflow:auto}.card{border:1px solid #252b35;border-radius:10px;padding:12px;margin-bottom:10px;background:#10141b}.k{font-size:11px;color:#8d98a8;text-transform:uppercase;letter-spacing:.08em}.v{font-size:16px;font-weight:700;margin-top:4px}.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.mono{font:12px ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;word-break:break-word}.good{color:#55d6a1}.warn{color:#f2bd62}.bad{color:#ff7f8a}@media(max-width:850px){.layout{grid-template-columns:1fr;height:auto}.panel{border-left:0;border-top:1px solid #252b35}}
+</style>
+</head>
+<body>
+<header class="top"><div><div class="title">GannWyck Model 1 Lab</div><div class="muted">Engine experimental • candles fechados • sem repaint</div></div><div class="controls"><select id="symbol"><option>BTCUSDT</option><option>ETHUSDT</option><option>SOLUSDT</option></select><select id="interval"><option value="1d">1D</option><option value="4h">4H</option><option value="12h">12H</option><option value="1h">1H</option></select><select id="limit"><option value="200">200 candles</option><option value="500" selected>500 candles</option><option value="1000">1000 candles</option></select><button id="load">Carregar</button></div></header>
+<div class="layout"><div id="chart"></div><aside class="panel"><div class="card"><div class="k">Status</div><div id="status" class="v">Carregando…</div></div><div class="card grid"><div><div class="k">Tendência</div><div id="trend" class="v">-</div></div><div><div class="k">Sinal</div><div id="signal" class="v">-</div></div></div><div class="card"><div class="k">Range</div><div id="range" class="mono">-</div></div><div class="card"><div class="k">DL</div><div id="dl" class="mono">-</div></div><div class="card"><div class="k">Taps</div><div id="taps" class="mono">-</div></div><div class="card"><div class="k">BOS / Trade</div><div id="trade" class="mono">-</div></div><div class="card"><div class="k">JSON</div><button id="copy">Copiar resultado</button><pre id="json" class="mono"></pre></div></aside></div>
+<script src="src/gannwyck-model1.js"></script>
+<script>
+const $=id=>document.getElementById(id);let chart,series;
+function fmt(n){return Number.isFinite(n)?n.toLocaleString('en-US',{maximumFractionDigits:4}):'-'}
+async function load(){
+  $('status').textContent='Buscando candles…';
+  const symbol=$('symbol').value, interval=$('interval').value, limit=$('limit').value;
+  try{
+    const r=await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`); if(!r.ok) throw new Error('Binance HTTP '+r.status);
+    const raw=await r.json(); const candles=raw.slice(0,-1).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5]}));
+    const result=GannWyckModel1.analyze(candles,{lookback:Math.min(80,candles.length)}); renderChart(candles,result); render(result); $('status').textContent=`OK • ${candles.length} candles fechados`;
+  }catch(e){$('status').textContent='Erro: '+e.message;$('status').className='v bad'}
+}
+function renderChart(candles,result){
+  if(chart) chart.remove();
+  chart=LightweightCharts.createChart($('chart'),{layout:{background:{color:'#0b0e13'},textColor:'#aab4c3'},grid:{vertLines:{color:'#161c24'},horzLines:{color:'#161c24'}},rightPriceScale:{borderColor:'#252b35'},timeScale:{borderColor:'#252b35}});
+  series=chart.addCandlestickSeries(); series.setData(candles);
+  if(result.range){for(const [title,price] of [['Range High',result.range.rangeHigh],['Range Low',result.range.rangeLow],['DL upper',result.dl.upper],['DL lower',result.dl.lower]]) series.createPriceLine({price,title,lineWidth:1,axisLabelVisible:true});}
+  if(result.signal){series.createPriceLine({price:result.signal.entry,title:'Entry',lineWidth:2});series.createPriceLine({price:result.signal.stop,title:'Stop',lineWidth:2});series.createPriceLine({price:result.signal.target,title:'Target',lineWidth:2});}
+  chart.timeScale().fitContent(); window.onresize=()=>chart.applyOptions({width:$('chart').clientWidth,height:$('chart').clientHeight});
+}
+function render(r){
+ $('trend').textContent=r.trend||'-';$('signal').textContent=r.signal?r.signal.side:'Nenhum';$('signal').className='v '+(r.signal?'good':'warn');
+ $('range').textContent=r.range?`High ${fmt(r.range.rangeHigh)}\nLow  ${fmt(r.range.rangeLow)}\nMid  ${fmt(r.range.midpoint)}\nSize ${fmt(r.range.range)}`:'-';
+ $('dl').textContent=r.dl?`1.35  ${fmt(r.dl.upper)}\n0     ${fmt(r.dl.zero)}\n-0.35 ${fmt(r.dl.lower)}`:'-';
+ $('taps').textContent=(r.taps||[]).map((t,i)=>`Tap ${i+1}: idx=${t.index} price=${fmt(t.price)} type=${t.type}`).join('\n')||'Nenhum';
+ $('trade').textContent=r.bos?`BOS ${r.bos.type} @ idx ${r.bos.index}\nLevel ${fmt(r.bos.level)}\n\n`+(r.signal?`Entry  ${fmt(r.signal.entry)}\nStop   ${fmt(r.signal.stop)}\nTarget ${fmt(r.signal.target)}\nRR     ${fmt(r.signal.rr)}`:'Sem trade válido'):'BOS não confirmado';
+ $('json').textContent=JSON.stringify(r,null,2);window.__result=r;
+}
+$('load').onclick=load;$('copy').onclick=()=>navigator.clipboard?.writeText(JSON.stringify(window.__result,null,2));load();
+</script>
+</body></html>
