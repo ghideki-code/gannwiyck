@@ -6,21 +6,17 @@ ok('normalizeCandles',GannWyckModel1.normalizeCandles(candles).length===30);
 ok('range exists',!!r.range);
 ok('DL Fibonacci',r.dl && r.rules.dlFib.join(',')==='1.35,0,-0.35');
 ok('result serializable',(()=>{JSON.stringify(r);return true})());
-// Synthetic BOS primitive test
 const b=GannWyckModel1.detectBOS([{high:10,low:5,close:8},{high:11,low:6,close:9},{high:12,low:7,close:13}],{index:1},'up');
 ok('bullish BOS by close',!!b && b.index===2);
-// Tap 3 must respect minimum displacement from BOS
 const tap3=GannWyckModel1.findTap3([{index:0,high:110,low:90,close:100},{index:1,high:112,low:92,close:104},{index:2,high:113,low:93,close:106},{index:3,high:114,low:94,close:108},{index:4,high:115,low:95,close:107}],{upper:120,zero:100,lower:80},'up',1,2);
 ok('Tap 3 displacement',!!tap3 && tap3.index===3 && tap3.displacement===2);
-// Directional invariants
-const longSignal=GannWyckModel1.outcome([], {valid:true,side:'LONG',confirmationIndex:0,entry:100,stop:95,target:110});
-ok('valid LONG invariant',longSignal.status==='open');
-const shortSignal=GannWyckModel1.outcome([], {valid:true,side:'SHORT',confirmationIndex:0,entry:100,stop:105,target:90});
-ok('valid SHORT invariant',shortSignal.status==='open');
-const badLong=GannWyckModel1.outcome([], {valid:true,side:'LONG',confirmationIndex:0,entry:100,stop:105,target:90});
-ok('invalid direction does not crash',badLong.status==='open');
-// Backtest summary exposes R metrics
+const longSignal={valid:true,side:'LONG',confirmationIndex:0,entry:100,stop:95,target:110,rr:2};
+const longOutcome=GannWyckModel1.outcome([{time:0,open:100,high:100,low:100,close:100},{time:1,open:100,high:110,low:99,close:109}],longSignal);
+ok('LONG target result in R',longOutcome.status==='target'&&longOutcome.r===2);
+const shortSignal={valid:true,side:'SHORT',confirmationIndex:0,entry:100,stop:105,target:90,rr:2};
+const shortOutcome=GannWyckModel1.outcome([{time:0,open:100,high:100,low:100,close:100},{time:1,open:100,high:101,low:90,close:91}],shortSignal);
+ok('SHORT target result in R',shortOutcome.status==='target'&&shortOutcome.r===2);
 const bt=GannWyckModel1.backtest(candles,{trend:'up',warmup:10});
-ok('backtest R metrics',Object.prototype.hasOwnProperty.call(bt.summary,'avgR')&&Object.prototype.hasOwnProperty.call(bt.summary,'totalR'));
+ok('backtest R metrics',Object.prototype.hasOwnProperty.call(bt.summary,'avgR')&&Object.prototype.hasOwnProperty.call(bt.summary,'totalR')&&Object.prototype.hasOwnProperty.call(bt.summary,'profitFactor'));
 document.getElementById('out').textContent=out.join('\n')+'\n\n'+(out.every(x=>x.startsWith('PASS'))?'ALL TESTS PASSED':'CHECK FAILURES');
 </script></html>
