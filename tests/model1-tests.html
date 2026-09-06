@@ -1,0 +1,13 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>GannWyck Model 1 tests</title><pre id="out"></pre><script src="../src/gannwyck-model1.js"></script><script>
+const out=[];function ok(name,condition,detail=''){out.push(`${condition?'PASS':'FAIL'}  ${name}${detail?' — '+detail:''}`);}
+const candles=Array.from({length:30},(_,i)=>({time:i,open:100+i*.2,high:105+i*.2,low:95+i*.2,close:101+i*.2}));
+const r=GannWyckModel1.analyze(candles,{trend:'up',lookback:30});
+ok('normalizeCandles',GannWyckModel1.normalizeCandles(candles).length===30);
+ok('range exists',!!r.range);
+ok('DL Fibonacci',r.dl && r.rules.dlFib.join(',')==='1.35,0,-0.35');
+ok('result serializable',(()=>{JSON.stringify(r);return true})());
+// Synthetic BOS primitive test
+const b=GannWyckModel1.detectBOS([{high:10,low:5,close:8},{high:11,low:6,close:9},{high:12,low:7,close:13}],{index:1},'up');
+ok('bullish BOS by close',!!b && b.index===2);
+$('out').textContent=out.join('\n')+'\n\n'+(out.every(x=>x.startsWith('PASS'))?'ALL TESTS PASSED':'CHECK FAILURES');
+</script></html>
