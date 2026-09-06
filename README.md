@@ -6,9 +6,23 @@ Projeto experimental para formalizar e testar o GannWyck Model 1 em dados OHLC.
 
 Transformar as regras estudadas do método em regras explícitas, auditáveis e testáveis, mantendo separadas as hipóteses ainda não comprovadas.
 
-## Estado
+## Terminal online
 
-Primeira versão: engine JavaScript independente + interface web para testar candles reais da Binance.
+- `index.html` terminal principal com atualização automática e preço LIVE.
+- `research.html` laboratório histórico para backtest, com seleção de período, timeframes e ocorrências clicáveis.
+- `src/gannwyck-model1.js` engine do Model 1.
+
+## Timeframes
+
+15M, 30M, 1H, 4H, 8H, 12H, 1D, 3D, 5D, 1W, 1M e 2M.
+
+Os timeframes compostos são agregados no navegador quando necessário.
+
+## Research / Backtest
+
+O laboratório permite selecionar 7, 30, 90, 180 dias ou 1 ano, carregar o histórico disponível e executar o motor sobre cada janela histórica. Cada ocorrência mostra Entry, Stop, Target, R:R e resultado. Ao clicar numa ocorrência, o gráfico navega para o BOS e marca T1, T2, BOS e T3.
+
+O backtest mede somente as regras atualmente codificadas. Ele não valida a metodologia original.
 
 ## Modelo 1
 
@@ -28,13 +42,19 @@ Fluxo principal:
 
 As âncoras exatas usadas para calcular os níveis Fibonacci ainda são uma hipótese de implementação e devem ser validadas contra exemplos do método original.
 
-## Executar
+## Atualização automática
 
-Abra `index.html` diretamente no navegador. A página usa a API pública de candles da Binance e a biblioteca Lightweight Charts via CDN.
+O terminal principal atualiza os candles periodicamente e mantém o preço via stream público da Binance. A análise é refeita quando o histórico é atualizado.
+
+## Publicação
+
+O repositório inclui GitHub Pages via `.github/workflows/pages.yml`. Depois de habilitar Pages usando GitHub Actions nas configurações do repositório, cada push em `main` pode publicar automaticamente a versão online.
 
 ## Estrutura
 
-- `index.html` interface de teste
+- `index.html` interface principal
+- `research.html` laboratório de pesquisa/backtest
 - `src/gannwyck-model1.js` engine do Model 1
 - `docs/MODEL-1-SPEC.md` especificação das regras
 - `tests/model1-tests.html` testes básicos do engine
+- `.github/workflows/pages.yml` publicação automática
