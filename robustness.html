@@ -88,26 +88,6 @@ async function run(){
   const full=aggregate(ordered),baseOos=aggregate(oos),without1=aggregate(scenarios[1][1]),without3=aggregate(scenarios[3][1]);
   const top1=ranked[0]?.r??null,top3=ranked.slice(0,3).reduce((s,x)=>s+x.r,0);
   const concentration=baseOos.totalR?top3/baseOos.totalR:null;
-  const riskFloorScenarios=[0.0025,0.005,0.0075,0.01,0.015,0.02].map(floor=>{
-    const rows=oos.map(x=>{
-      const riskPct=finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null;
-      const adjustedR=(finite(riskPct)&&riskPct>=floor)?Number(x.r):-1;
-      return {...x,r:adjustedR,riskPct};
-    });
-    return {riskFloorPct:floor, ...aggregate(rows), eligible:oos.filter(x=>{
-      const rp=finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null;
-      return finite(rp)&&rp>=floor;
-    }).length};
-  });
-  const setupAge=oos.map(x=>({
-    id:x.id,side:x.side,entryIndex:x.entryIndex,t1ToT2:x.t1ToT2,t2ToBOS:x.t2ToBOS,bosToT3:x.bosToT3,
-    t2ToEntry:finite(x.entryIndex)&&finite(x.t2)?Number(x.entryIndex)-Number(x.t2):null,
-    riskPctEntry:finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null,
-    rr:x.rr,r:x.r
-  }));
-  const ageBands=[
-    ['0-24',0,24],['25-168',25,168],['169-720',169,720],['721+',721,Infinity]
-  ].map(([label,min,max])=>aggregate(setupAge.filter(x=>finite(x.t2ToEntry)&&x.t2ToEntry>=min&&x.t2ToEntry<=max).map(x=>({...x,outcome:x.r>=0?'target':'stop'}))));
   const gateIssues=[];
   if(!audit.ok)gateIssues.push('look-ahead audit falhou');
   if(oos.length<20)gateIssues.push('OOS pequeno');
