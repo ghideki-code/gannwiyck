@@ -26,6 +26,8 @@ h1{margin:0 0 6px;font-size:20px}.muted{color:#8190a3}.tag{display:inline-block;
 <div class="panel"><h2>Walk-Forward por fold</h2><table><thead><tr><th>Fold</th><th>OOS N</th><th>Wins</th><th>Losses</th><th>Win%</th><th>Total R</th><th>Avg R</th><th>PF</th><th>Max DD R</th></tr></thead><tbody id="folds"></tbody></table></div>
 <div class="panel"><h2>Sensibilidade a custo em R por operação fechada</h2><table><thead><tr><th>Custo</th><th>Total R OOS</th><th>Avg R</th><th>PF</th><th>Win%</th></tr></thead><tbody id="costs"></tbody></table>
 <div class="note">O custo é um teste de estresse abstrato em R por operação. Não representa a taxa real da Binance até que taxas, slippage e funding reais sejam modelados separadamente.</div></div>
+<div class="panel"><h2>Piso de risco estrutural</h2><table><thead><tr><th>Piso risco/entrada</th><th>Elegíveis</th><th>Wins</th><th>Losses</th><th>Win%</th><th>Total R</th><th>Avg R</th><th>PF</th></tr></thead><tbody id="riskFloor"></tbody></table><div class="note">Teste diagnóstico: operações cujo risco original fica abaixo do piso são tratadas como -1R. Os pisos são pré-definidos e não são ajustados ao resultado.</div></div>
+<div class="panel"><h2>Idade estrutural do setup</h2><table><thead><tr><th>T2 → entrada</th><th>N</th><th>Wins</th><th>Losses</th><th>Win%</th><th>Total R</th><th>Avg R</th><th>PF</th></tr></thead><tbody id="ageBands"></tbody></table><div class="note">A idade mede candles entre T2 e a entrada. Serve para detectar setups que permanecem congelados por períodos excessivamente longos.</div></div>
 <div class="panel"><h2>Auditoria</h2><div id="audit" class="note">Execute o teste.</div></div>
 <div class="panel"><h2>JSON</h2><pre id="json">Execute o teste.</pre></div>
 </div>
@@ -75,9 +77,31 @@ async function run(){
   const folds=[];let start=initial,base=Math.max(1,Math.floor((ordered.length-initial)/5));for(let i=0;i<5&&start<ordered.length;i++){const end=i===4?ordered.length:Math.min(ordered.length,start+base),r=ordered.slice(start,end),s=aggregate(r);folds.push({...s,fold:i+1});start=end}
   $('folds').innerHTML=folds.map(x=>tr([x.fold,x.samples,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor),f(x.maxDrawdownR)])).join('');
   $('costs').innerHTML=[0,.05,.10,.20,.30,.50].map(c=>{const s=aggregate(oos,c);return tr([c.toFixed(2)+'R',f(s.totalR),f(s.avgR),f(s.profitFactor),pct(s.winRate)])}).join('');
+  const riskEl=$('riskFloor'); if(riskEl) riskEl.innerHTML=riskFloorScenarios.map(x=>tr([(x.riskFloorPct*100).toFixed(2)+'%',x.eligible,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor)])).join('');
+  const ageEl=$('ageBands'); if(ageEl) ageEl.innerHTML=ageBands.map((x,i)=>tr([['0-24','25-168','169-720','721+'][i],x.samples,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor)])).join('');
   const full=aggregate(ordered),baseOos=aggregate(oos),without1=aggregate(scenarios[1][1]),without3=aggregate(scenarios[3][1]);
   const top1=ranked[0]?.r??null,top3=ranked.slice(0,3).reduce((s,x)=>s+x.r,0);
   const concentration=baseOos.totalR?top3/baseOos.totalR:null;
+  const riskFloorScenarios=[0.0025,0.005,0.0075,0.01,0.015,0.02].map(floor=>{
+    const rows=oos.map(x=>{
+      const riskPct=finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null;
+      const adjustedR=(finite(riskPct)&&riskPct>=floor)?Number(x.r):-1;
+      return {...x,r:adjustedR,riskPct};
+    });
+    return {riskFloorPct:floor, ...aggregate(rows), eligible:oos.filter(x=>{
+      const rp=finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null;
+      return finite(rp)&&rp>=floor;
+    }).length};
+  });
+  const setupAge=oos.map(x=>({
+    id:x.id,side:x.side,entryIndex:x.entryIndex,t1ToT2:x.t1ToT2,t2ToBOS:x.t2ToBOS,bosToT3:x.bosToT3,
+    t2ToEntry:finite(x.entryIndex)&&finite(x.t2)?Number(x.entryIndex)-Number(x.t2):null,
+    riskPctEntry:finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null,
+    rr:x.rr,r:x.r
+  }));
+  const ageBands=[
+    ['0-24',0,24],['25-168',25,168],['169-720',169,720],['721+',721,Infinity]
+  ].map(([label,min,max])=>aggregate(setupAge.filter(x=>finite(x.t2ToEntry)&&x.t2ToEntry>=min&&x.t2ToEntry<=max).map(x=>({...x,outcome:x.r>=0?'target':'stop'}))));
   const gateIssues=[];
   if(!audit.ok)gateIssues.push('look-ahead audit falhou');
   if(oos.length<20)gateIssues.push('OOS pequeno');
@@ -87,7 +111,7 @@ async function run(){
   if(folds.filter(x=>x.totalR>0).length<3)gateIssues.push('menos de 3/5 folds OOS positivos');
   $('gate').innerHTML=gateIssues.length?'<span class="bad">NÃO PASSA O GATE DE ROBUSTEZ</span><br>'+gateIssues.join('<br>'):'<span class="good">PASSA O GATE DE ROBUSTEZ PRELIMINAR</span>';
   $('audit').textContent=audit.ok?`PASSOU: ${audit.eventsChecked} eventos, 0 violações de look-ahead.`:`FALHOU: ${audit.violations.length} violações.`;
-  result={version:'V5.0-robustness',symbol:$('symbol').value,timeframe:$('tf').value,candles:cs.length,events:bt.events.length,closed:events.length,oosDefinition:'last 50% of closed events by chronological entry index',full, oos:baseOos, stress:scenarios.map(([name,rows])=>({name,...aggregate(rows)})),folds,costSensitivity:[0,.05,.1,.2,.3,.5].map(cost=>({costR:cost,...aggregate(oos,cost)})),outlierDiagnostics:{top1R:top1,top3R,top3Contribution:concentration,oosWithoutTop1:without1,oosWithoutTop3:without3},audit,gate:{passed:gateIssues.length===0,issues:gateIssues},method:'Real Binance candles only. Stress tests operate on observed event returns; no synthetic market candles and no parameter fitting.'};
+  result={version:'V5.0-robustness',symbol:$('symbol').value,timeframe:$('tf').value,candles:cs.length,events:bt.events.length,closed:events.length,oosDefinition:'last 50% of closed events by chronological entry index',full, oos:baseOos, stress:scenarios.map(([name,rows])=>({name,...aggregate(rows)})),folds,costSensitivity,riskFloorScenarios,setupAgeBands:ageBands,capturedSetupAge:setupAge,:[0,.05,.1,.2,.3,.5].map(cost=>({costR:cost,...aggregate(oos,cost)})),outlierDiagnostics:{top1R:top1,top3R,top3Contribution:concentration,oosWithoutTop1:without1,oosWithoutTop3:without3},audit,gate:{passed:gateIssues.length===0,issues:gateIssues},method:'Real Binance candles only. Stress tests operate on observed event returns; no synthetic market candles and no parameter fitting.'};
   $('json').textContent=JSON.stringify(result,null,2);
  }catch(e){$('json').textContent='Erro: '+e.message;$('gate').textContent='ERRO: '+e.message}
  finally{b.disabled=false;b.textContent='EXECUTAR V5.0'}
