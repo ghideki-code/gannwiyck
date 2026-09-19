@@ -47,7 +47,7 @@ function aggregate(rows,cost=0){
 async function candles(){
  const s=$('symbol').value,t=$('tf').value,n=Math.min(50000,Math.max(500,Math.floor(+$('limit').value)||50000)),out=[];let end=null;
  while(out.length<n){
-  const take=Math.min(1000,n-out.length);let u=`https://api.binance.com/api/v3/klines?symbol=${s}&interval=${t}&limit=${take}`;if(end!==null)u+=`&endTime=${end}`;
+  const take=Math.min(1000,n-out.length);let u=`/api/klines?symbol=${encodeURIComponent(s)}&interval=${encodeURIComponent(t)}&limit=${take}`;if(end!==null)u+=`&endTime=${end}`;
   const a=await fetch(u).then(r=>{if(!r.ok)throw Error('Binance HTTP '+r.status);return r.json()});if(!a.length)break;out.unshift(...a);end=a[0][0]-1;if(a.length<take)break;await new Promise(r=>setTimeout(r,100));
  }
  const seen=new Set();return out.filter(x=>{if(seen.has(x[0]))return false;seen.add(x[0]);return true}).sort((a,b)=>a[0]-b[0]).slice(-n).map(x=>({time:x[0],open:+x[1],high:+x[2],low:+x[3],close:+x[4],volume:+x[5]}));
