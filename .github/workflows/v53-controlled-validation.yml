@@ -1,0 +1,34 @@
+name: GannWyck V5.3 Controlled Validation
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '37 */6 * * *'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run controlled V5.3
+        env:
+          SYMBOL: BTCUSDT
+          TIMEFRAMES: 1h,4h,12h,1d
+          MAX_CANDLES: 50000
+          MAX_BARS: 120
+          WARMUP: 100
+        run: node bot/run-v53.mjs
+      - name: Upload V5.3 reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gannwyck-v53-${{ github.run_number }}
+          path: bot-results-v53/
+          retention-days: 30
+      - name: Publish summary
+        if: always()
+        run: |
+          if [ -f bot-results-v53/SUMMARY.md ]; then cat bot-results-v53/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"; fi
