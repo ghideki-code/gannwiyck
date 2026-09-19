@@ -36,4 +36,4 @@ jobs:
           retention-days: 30
       - name: Publish summary
         if: always()
-        run: cat bot-results/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+        run: if [ -f bot-results/SUMMARY.md ]; then cat bot-results/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"; fi
