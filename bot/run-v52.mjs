@@ -56,8 +56,8 @@ const diagnostic={
     winners:winners.map(e=>e.setupAge).filter(Number.isFinite),
     losers:losers.map(e=>e.setupAge).filter(Number.isFinite)
   },
-  temporal: E.GannWyckResearchStats.temporalDiagnostics(rows),
-  walkForward: E.GannWyckResearchStats.walkForwardDiagnostics(rows,{folds:5,initialFraction:.5}),
+  temporal: E.GannWyckResearchStats.temporalDiagnostics(r.events),
+  walkForward: E.GannWyckResearchStats.walkForwardDiagnostics(r.events,{folds:5,initialFraction:.5}),
   observations:[
     'A positive OOS result is not sufficient when robustness or walk-forward fails.',
     'Very large R multiples are inspected for concentration, structural age and small-risk effects.',
