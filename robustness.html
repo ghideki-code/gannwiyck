@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GannWyck V5.0 Robustness</title>
+<title>GannWyck V5.1 Robustness</title>
 <style>
 body{margin:0;background:#080b10;color:#dbe4ee;font:13px Inter,system-ui,sans-serif}.wrap{max-width:1400px;margin:auto;padding:20px}
 h1{margin:0 0 6px;font-size:20px}.muted{color:#8190a3}.tag{display:inline-block;border:1px solid #334155;border-radius:7px;padding:5px 8px;margin:4px 4px 12px 0;color:#9ccfff}
@@ -9,15 +9,15 @@ h1{margin:0 0 6px;font-size:20px}.muted{color:#8190a3}.tag{display:inline-block;
 </style></head>
 <body>
 <div class="wrap">
-<h1>GannWyck Model 1 · V5.0 Robustness</h1>
-<div class="tag">REAL BINANCE DATA</div><div class="tag">CAUSAL / NO LOOK-AHEAD</div><div class="tag">NO PARAMETER FITTING</div><div class="tag">OUTLIER STRESS</div>
+<h1>GannWyck Model 1 · V5.1 Robustness</h1>
+<div class="tag">REAL BINANCE DATA</div><div class="tag">CAUSAL / NO LOOK-AHEAD</div><div class="tag">NO PARAMETER FITTING</div><div class="tag">OUTLIER STRESS</div><div class="tag">STRUCTURAL RISK / SETUP AGE</div>
 <p class="muted">Esta página não cria candles sintéticos. Todos os eventos vêm do backtest causal sobre candles reais. Os testes abaixo apenas removem, limitam ou penalizam retornos já observados.</p>
 <div class="controls">
 <select id="symbol" class="field"><option>BTCUSDT</option></select>
 <select id="tf" class="field"><option>1h</option><option>4h</option><option>12h</option><option>1d</option></select>
 <input id="limit" class="field" type="number" min="500" max="50000" step="500" value="50000">
 <input id="warmup" class="field" type="number" min="50" max="300" value="100">
-<button id="run">EXECUTAR V5.0</button><button id="save" type="button">SALVAR JSON</button>
+<button id="run">EXECUTAR V5.1</button><button id="save" type="button">SALVAR JSON</button>
 </div>
 <div class="panel"><h2>Gate científico</h2><div id="gate" class="note">Execute o teste.</div></div>
 <div class="panel"><h2>Stress de concentração dos ganhos</h2>
@@ -77,6 +77,12 @@ async function run(){
   const folds=[];let start=initial,base=Math.max(1,Math.floor((ordered.length-initial)/5));for(let i=0;i<5&&start<ordered.length;i++){const end=i===4?ordered.length:Math.min(ordered.length,start+base),r=ordered.slice(start,end),s=aggregate(r);folds.push({...s,fold:i+1});start=end}
   $('folds').innerHTML=folds.map(x=>tr([x.fold,x.samples,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor),f(x.maxDrawdownR)])).join('');
   $('costs').innerHTML=[0,.05,.10,.20,.30,.50].map(c=>{const s=aggregate(oos,c);return tr([c.toFixed(2)+'R',f(s.totalR),f(s.avgR),f(s.profitFactor),pct(s.winRate)])}).join('');
+  const riskFloorScenarios=[0.0025,0.005,0.0075,0.01,0.015,0.02].map(floor=>{
+    const rows=oos.map(x=>{const riskPct=finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null;return {...x,r:(finite(riskPct)&&riskPct>=floor)?Number(x.r):-1,riskPct};});
+    return {riskFloorPct:floor,...aggregate(rows),eligible:rows.filter(x=>finite(x.riskPct)&&x.riskPct>=floor).length};
+  });
+  const setupAge=oos.map(x=>({id:x.id,side:x.side,entryIndex:x.entryIndex,t1ToT2:x.t1ToT2,t2ToBOS:x.t2ToBOS,bosToT3:x.bosToT3,t2ToEntry:finite(x.entryIndex)&&finite(x.t2)?Number(x.entryIndex)-Number(x.t2):null,riskPctEntry:finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null,rr:x.rr,r:x.r}));
+  const ageBands=[['0-24',0,24],['25-168',25,168],['169-720',169,720],['721+',721,Infinity]].map(([label,min,max])=>aggregate(setupAge.filter(x=>finite(x.t2ToEntry)&&x.t2ToEntry>=min&&x.t2ToEntry<=max).map(x=>({...x,outcome:x.r>=0?'target':'stop'}))));
   const riskEl=$('riskFloor'); if(riskEl) riskEl.innerHTML=riskFloorScenarios.map(x=>tr([(x.riskFloorPct*100).toFixed(2)+'%',x.eligible,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor)])).join('');
   const ageEl=$('ageBands'); if(ageEl) ageEl.innerHTML=ageBands.map((x,i)=>tr([['0-24','25-168','169-720','721+'][i],x.samples,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor)])).join('');
   const full=aggregate(ordered),baseOos=aggregate(oos),without1=aggregate(scenarios[1][1]),without3=aggregate(scenarios[3][1]);
@@ -111,10 +117,10 @@ async function run(){
   if(folds.filter(x=>x.totalR>0).length<3)gateIssues.push('menos de 3/5 folds OOS positivos');
   $('gate').innerHTML=gateIssues.length?'<span class="bad">NÃO PASSA O GATE DE ROBUSTEZ</span><br>'+gateIssues.join('<br>'):'<span class="good">PASSA O GATE DE ROBUSTEZ PRELIMINAR</span>';
   $('audit').textContent=audit.ok?`PASSOU: ${audit.eventsChecked} eventos, 0 violações de look-ahead.`:`FALHOU: ${audit.violations.length} violações.`;
-  result={version:'V5.0-robustness',symbol:$('symbol').value,timeframe:$('tf').value,candles:cs.length,events:bt.events.length,closed:events.length,oosDefinition:'last 50% of closed events by chronological entry index',full, oos:baseOos, stress:scenarios.map(([name,rows])=>({name,...aggregate(rows)})),folds,costSensitivity,riskFloorScenarios,setupAgeBands:ageBands,capturedSetupAge:setupAge,:[0,.05,.1,.2,.3,.5].map(cost=>({costR:cost,...aggregate(oos,cost)})),outlierDiagnostics:{top1R:top1,top3R,top3Contribution:concentration,oosWithoutTop1:without1,oosWithoutTop3:without3},audit,gate:{passed:gateIssues.length===0,issues:gateIssues},method:'Real Binance candles only. Stress tests operate on observed event returns; no synthetic market candles and no parameter fitting.'};
+  result={version:'V5.1-robustness',symbol:$('symbol').value,timeframe:$('tf').value,candles:cs.length,events:bt.events.length,closed:events.length,oosDefinition:'last 50% of closed events by chronological entry index',full, oos:baseOos, stress:scenarios.map(([name,rows])=>({name,...aggregate(rows)})),folds,costSensitivity:[0,.05,.1,.2,.3,.5].map(cost=>({costR:cost,...aggregate(oos,cost)})),riskFloorScenarios,setupAgeBands:ageBands,capturedSetupAge:setupAge,outlierDiagnostics:{top1R:top1,top3R,top3Contribution:concentration,oosWithoutTop1:without1,oosWithoutTop3:without3},audit,gate:{passed:gateIssues.length===0,issues:gateIssues},method:'Real Binance candles only. Stress tests operate on observed event returns; no synthetic market candles and no parameter fitting.'};
   $('json').textContent=JSON.stringify(result,null,2);
  }catch(e){$('json').textContent='Erro: '+e.message;$('gate').textContent='ERRO: '+e.message}
- finally{b.disabled=false;b.textContent='EXECUTAR V5.0'}
+ finally{b.disabled=false;b.textContent='EXECUTAR V5.1'}
 }
 $('run').onclick=run;
 $('save').onclick=()=>{if(!result){alert('Execute primeiro.');return}const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='gannwyck_v5_robustness_'+$('symbol').value+'_'+$('tf').value+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
