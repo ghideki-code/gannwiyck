@@ -83,7 +83,12 @@ async function run(){
     return {riskFloorPct:floor,...aggregate(rows),eligible:rows.filter(x=>finite(x.riskPct)&&x.riskPct>=floor).length};
   });
   const setupAge=oos.map(x=>({id:x.id,side:x.side,entryIndex:x.entryIndex,t1ToT2:x.t1ToT2,t2ToBOS:x.t2ToBOS,bosToT3:x.bosToT3,t2ToEntry:finite(x.entryIndex)&&finite(x.t2)?Number(x.entryIndex)-Number(x.t2):null,riskPctEntry:finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null,rr:x.rr,r:x.r}));
-  const ageBands=[['0-24',0,24],['25-168',25,168],['169-720',169,720],['721+',721,Infinity]].map(([label,min,max])=>aggregate(setupAge.filter(x=>finite(x.t2ToEntry)&&x.t2ToEntry>=min&&x.t2ToEntry<=max).map(x=>({...x,outcome:x.r>=0?'target':'stop'}))));
+  const ageBands=[['0-24',0,24],['25-168',25,168],['169-720',169,720],['721+',721,Infinity]].map(([label,min,max])=>aggregate(setupAge.filter(x=>finite(x.t2ToEntry)&&x.t2ToEntry>=min&&x.t2ToEntry<=max).map(x=>({...x,outcome:x.outcome}))));
+  const ageCaps=[168,720,1440,2880,5760].map(maxAge=>{
+    const eligible=setupAge.filter(x=>finite(x.t2ToEntry)&&x.t2ToEntry<=maxAge);
+    const excluded=setupAge.length-eligible.length;
+    return {maxAge,eligible:eligible.length,excluded,...aggregate(eligible.map(x=>({...x,outcome:x.outcome})))};
+  });
   const riskFloorExclusion=riskFloorScenarios.map(x=>{
     const eligible=oos.filter(e=>finite(e.entry)&&Number(e.entry)!==0&&Math.abs(Number(e.risk)/Number(e.entry))>=x.riskFloorPct);
     return {riskFloorPct:x.riskFloorPct,excluded:oos.length-eligible.length,...aggregate(eligible)};
@@ -106,7 +111,7 @@ async function run(){
   result={version:'V5.2-robustness',symbol:$('symbol').value,timeframe:$('tf').value,candles:cs.length,events:bt.events.length,closed:events.length,oosDefinition:'last 50% of closed events by chronological entry index',full, oos:baseOos, stress:scenarios.map(([name,rows])=>({name,...aggregate(rows)})),folds,costSensitivity:[0,.05,.1,.2,.3,.5].map(cost=>({costR:cost,...aggregate(oos,cost)})),riskFloorScenarios,riskFloorExclusion,setupAgeBands:ageBands,ageCapScenarios:ageCaps,capturedSetupAge:setupAge,outlierDiagnostics:{top1R:top1,top3R,top3Contribution:concentration,oosWithoutTop1:without1,oosWithoutTop3:without3},audit,gate:{passed:gateIssues.length===0,issues:gateIssues},method:'Real Binance candles only. Stress tests operate on observed event returns; no synthetic market candles and no parameter fitting.'};
   $('json').textContent=JSON.stringify(result,null,2);
  }catch(e){$('json').textContent='Erro: '+e.message;$('gate').textContent='ERRO: '+e.message}
- finally{b.disabled=false;b.textContent='EXECUTAR V5.1'}
+ finally{b.disabled=false;b.textContent='EXECUTAR V5.2'}
 }
 $('run').onclick=run;
 $('save').onclick=()=>{if(!result){alert('Execute primeiro.');return}const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='gannwyck_v5_2_robustness_'+$('symbol').value+'_'+$('tf').value+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
