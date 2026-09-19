@@ -1,4 +1,6 @@
-const fs=require('fs/promises'),path=require('path'),vm=require('vm');
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import vm from 'node:vm';
 const ROOT=process.cwd(),OUT=path.join(ROOT,'bot-results');
 const SYMBOL=process.env.SYMBOL||'BTCUSDT',TFS=(process.env.TIMEFRAMES||'1h,4h,12h,1d').split(','),MAX=+(process.env.MAX_CANDLES||50000),MAXB=+(process.env.MAX_BARS||120),WARM=+(process.env.WARMUP||100);
 const BASE='https://data-api.binance.vision/api/v3/klines',sleep=m=>new Promise(r=>setTimeout(r,m)),finite=x=>Number.isFinite(Number(x));
