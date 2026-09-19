@@ -24,4 +24,45 @@ const ages=oos.map(e=>({...e,setupAge:setupAge(e),riskPctEntry:riskPct(e)}));
 r.setupAgeBands=[['0-24',0,24],['25-168',25,168],['169-720',169,720],['721+',721,Infinity]].map(([band,min,max])=>{const k=ages.filter(e=>finite(e.setupAge)&&e.setupAge>=min&&e.setupAge<=max);return{band,...agg(k)}});
 r.ageCapScenarios=[168,720,1440,2880,5760].map(cap=>{const k=ages.filter(e=>finite(e.setupAge)&&e.setupAge<=cap);return{maxAgeBars:cap,excluded:oos.length-k.length,...agg(k)}});
 r.capturedSetupAge=ages.map(e=>({id:e.id,side:e.side,entryIndex:e.entryIndex,t1ToT2:e.t1ToT2,t2ToBOS:e.t2ToBOS,bosToT3:e.bosToT3,t2ToEntry:setupAge(e),riskPctEntry:riskPct(e),r:e.r}));
+const closedOos=oos.filter(e=>e.outcome==='target'||e.outcome==='stop');
+const group=key=>{const m={};for(const e of closedOos){const k=e[key]??'unknown';(m[k]??=[]).push(e)}return Object.entries(m).map(([k,v])=>({key:k,...agg(v)}))};
+const ageDiag=closedOos.map(e=>({...e,setupAge:setupAge(e),riskPctEntry:riskPct(e)}));
+const winners=ageDiag.filter(e=>e.outcome==='target'),losers=ageDiag.filter(e=>e.outcome==='stop');
+const avgField=(a,k)=>{const v=a.map(e=>Number(e[k])).filter(Number.isFinite);return v.length?v.reduce((s,x)=>s+x,0)/v.length:null};
+const diagnostic={
+  status:'diagnostic_only',
+  benchmark:'V5.2',
+  noParameterChange:true,
+  noOosOptimization:true,
+  oosConcentration:{
+    top1R:agg(closedOos.sort((a,b)=>(+b.r)-(+a.r)).slice(0,1)).totalR,
+    top3R:agg(closedOos.sort((a,b)=>(+b.r)-(+a.r)).slice(0,3)).totalR,
+    totalR:agg(closedOos).totalR
+  },
+  bySide:group('side'),
+  winnersVsLosers:{
+    winners:winners.length,
+    losers:losers.length,
+    avgRWinner:avgField(winners,'r'),
+    avgRLoss:avgField(losers,'r'),
+    avgSetupAgeWinner:avgField(winners,'setupAge'),
+    avgSetupAgeLoser:avgField(losers,'setupAge'),
+    avgRiskPctWinner:avgField(winners,'riskPctEntry'),
+    avgRiskPctLoser:avgField(losers,'riskPctEntry'),
+    avgT2ToEntryWinner:avgField(winners,'t2ToEntry'),
+    avgT2ToEntryLoser:avgField(losers,'t2ToEntry')
+  },
+  ageDistribution:{
+    winners:winners.map(e=>e.setupAge).filter(Number.isFinite),
+    losers:losers.map(e=>e.setupAge).filter(Number.isFinite)
+  },
+  temporal: E.GannWyckResearchStats.temporalDiagnostics(rows),
+  walkForward: E.GannWyckResearchStats.walkForwardDiagnostics(rows,{folds:5,initialFraction:.5}),
+  observations:[
+    'A positive OOS result is not sufficient when robustness or walk-forward fails.',
+    'Very large R multiples are inspected for concentration, structural age and small-risk effects.',
+    'No threshold is selected from OOS in this diagnostic phase.'
+  ]
+};
+r.diagnostic=diagnostic;
 all.push(r);await fs.writeFile(path.join(OUT,SYMBOL+'_'+tf.trim()+'_V5.2.json'),JSON.stringify(r,null,2));console.log(tf,r.gate)}const sum={version:'V5.2-AUTO',generatedAt:new Date().toISOString(),symbol:SYMBOL,timeframes:all.map(r=>({timeframe:r.source.timeframe,candles:r.source.candles,gate:r.gate,oos:r.oos,walkForward:r.walkForward.overall})),allGatesPassed:all.every(r=>r.gate.passed)};await fs.writeFile(path.join(OUT,'summary.json'),JSON.stringify(sum,null,2));await fs.writeFile(path.join(OUT,'SUMMARY.md'),'# Autonomous V5.2\n\n'+all.map(r=>'## '+r.source.timeframe+'\nGate: **'+(r.gate.passed?'PASS':'FAIL')+'**\nOOS Total R: '+r.oos.totalR+'\nWF Total R: '+r.walkForward.overall.totalR).join('\n\n'));if(!sum.allGatesPassed)process.exitCode=2})().catch(e=>{console.error(e);process.exitCode=1})
