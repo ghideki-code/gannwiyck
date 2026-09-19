@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>GannWyck V5.1 Robustness</title>
+<title>GannWyck V5.2 Robustness</title>
 <style>
 body{margin:0;background:#080b10;color:#dbe4ee;font:13px Inter,system-ui,sans-serif}.wrap{max-width:1400px;margin:auto;padding:20px}
 h1{margin:0 0 6px;font-size:20px}.muted{color:#8190a3}.tag{display:inline-block;border:1px solid #334155;border-radius:7px;padding:5px 8px;margin:4px 4px 12px 0;color:#9ccfff}
@@ -9,7 +9,7 @@ h1{margin:0 0 6px;font-size:20px}.muted{color:#8190a3}.tag{display:inline-block;
 </style></head>
 <body>
 <div class="wrap">
-<h1>GannWyck Model 1 · V5.1 Robustness</h1>
+<h1>GannWyck Model 1 · V5.2 Robustness</h1>
 <div class="tag">REAL BINANCE DATA</div><div class="tag">CAUSAL / NO LOOK-AHEAD</div><div class="tag">NO PARAMETER FITTING</div><div class="tag">OUTLIER STRESS</div><div class="tag">STRUCTURAL RISK / SETUP AGE</div>
 <p class="muted">Esta página não cria candles sintéticos. Todos os eventos vêm do backtest causal sobre candles reais. Os testes abaixo apenas removem, limitam ou penalizam retornos já observados.</p>
 <div class="controls">
@@ -17,7 +17,7 @@ h1{margin:0 0 6px;font-size:20px}.muted{color:#8190a3}.tag{display:inline-block;
 <select id="tf" class="field"><option>1h</option><option>4h</option><option>12h</option><option>1d</option></select>
 <input id="limit" class="field" type="number" min="500" max="50000" step="500" value="50000">
 <input id="warmup" class="field" type="number" min="50" max="300" value="100">
-<button id="run">EXECUTAR V5.1</button><button id="save" type="button">SALVAR JSON</button>
+<button id="run">EXECUTAR V5.2</button><button id="save" type="button">SALVAR JSON</button>
 </div>
 <div class="panel"><h2>Gate científico</h2><div id="gate" class="note">Execute o teste.</div></div>
 <div class="panel"><h2>Stress de concentração dos ganhos</h2>
@@ -28,6 +28,7 @@ h1{margin:0 0 6px;font-size:20px}.muted{color:#8190a3}.tag{display:inline-block;
 <div class="note">O custo é um teste de estresse abstrato em R por operação. Não representa a taxa real da Binance até que taxas, slippage e funding reais sejam modelados separadamente.</div></div>
 <div class="panel"><h2>Piso de risco estrutural</h2><table><thead><tr><th>Piso risco/entrada</th><th>Elegíveis</th><th>Wins</th><th>Losses</th><th>Win%</th><th>Total R</th><th>Avg R</th><th>PF</th></tr></thead><tbody id="riskFloor"></tbody></table><div class="note">Teste diagnóstico: operações cujo risco original fica abaixo do piso são tratadas como -1R. Os pisos são pré-definidos e não são ajustados ao resultado.</div></div>
 <div class="panel"><h2>Idade estrutural do setup</h2><table><thead><tr><th>T2 → entrada</th><th>N</th><th>Wins</th><th>Losses</th><th>Win%</th><th>Total R</th><th>Avg R</th><th>PF</th></tr></thead><tbody id="ageBands"></tbody></table><div class="note">A idade mede candles entre T2 e a entrada. Serve para detectar setups que permanecem congelados por períodos excessivamente longos.</div></div>
+<div class="panel"><h2>Stress de expiração estrutural</h2><table><thead><tr><th>Idade máxima</th><th>Elegíveis</th><th>Excluídos</th><th>Wins</th><th>Losses</th><th>Win%</th><th>Total R</th><th>Avg R</th><th>PF</th></tr></thead><tbody id="ageCaps"></tbody></table><div class="note">Diagnóstico pré-especificado: remove setups cuja idade T2 → entrada excede o limite. Não altera parâmetros do Model 1 e não entra no gate.</div></div>
 <div class="panel"><h2>Auditoria</h2><div id="audit" class="note">Execute o teste.</div></div>
 <div class="panel"><h2>JSON</h2><pre id="json">Execute o teste.</pre></div>
 </div>
@@ -83,8 +84,13 @@ async function run(){
   });
   const setupAge=oos.map(x=>({id:x.id,side:x.side,entryIndex:x.entryIndex,t1ToT2:x.t1ToT2,t2ToBOS:x.t2ToBOS,bosToT3:x.bosToT3,t2ToEntry:finite(x.entryIndex)&&finite(x.t2)?Number(x.entryIndex)-Number(x.t2):null,riskPctEntry:finite(x.entry)&&Number(x.entry)!==0?Math.abs(Number(x.risk)/Number(x.entry)):null,rr:x.rr,r:x.r}));
   const ageBands=[['0-24',0,24],['25-168',25,168],['169-720',169,720],['721+',721,Infinity]].map(([label,min,max])=>aggregate(setupAge.filter(x=>finite(x.t2ToEntry)&&x.t2ToEntry>=min&&x.t2ToEntry<=max).map(x=>({...x,outcome:x.r>=0?'target':'stop'}))));
+  const riskFloorExclusion=riskFloorScenarios.map(x=>{
+    const eligible=oos.filter(e=>finite(e.entry)&&Number(e.entry)!==0&&Math.abs(Number(e.risk)/Number(e.entry))>=x.riskFloorPct);
+    return {riskFloorPct:x.riskFloorPct,excluded:oos.length-eligible.length,...aggregate(eligible)};
+  });
   const riskEl=$('riskFloor'); if(riskEl) riskEl.innerHTML=riskFloorScenarios.map(x=>tr([(x.riskFloorPct*100).toFixed(2)+'%',x.eligible,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor)])).join('');
   const ageEl=$('ageBands'); if(ageEl) ageEl.innerHTML=ageBands.map((x,i)=>tr([['0-24','25-168','169-720','721+'][i],x.samples,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor)])).join('');
+  const ageCapEl=$('ageCaps'); if(ageCapEl) ageCapEl.innerHTML=ageCaps.map(x=>tr([x.maxAge,x.eligible,x.excluded,x.wins,x.losses,pct(x.winRate),f(x.totalR),f(x.avgR),f(x.profitFactor)])).join('');
   const full=aggregate(ordered),baseOos=aggregate(oos),without1=aggregate(scenarios[1][1]),without3=aggregate(scenarios[3][1]);
   const top1=ranked[0]?.r??null,top3=ranked.slice(0,3).reduce((s,x)=>s+x.r,0);
   const concentration=baseOos.totalR?top3/baseOos.totalR:null;
@@ -97,11 +103,11 @@ async function run(){
   if(folds.filter(x=>x.totalR>0).length<3)gateIssues.push('menos de 3/5 folds OOS positivos');
   $('gate').innerHTML=gateIssues.length?'<span class="bad">NÃO PASSA O GATE DE ROBUSTEZ</span><br>'+gateIssues.join('<br>'):'<span class="good">PASSA O GATE DE ROBUSTEZ PRELIMINAR</span>';
   $('audit').textContent=audit.ok?`PASSOU: ${audit.eventsChecked} eventos, 0 violações de look-ahead.`:`FALHOU: ${audit.violations.length} violações.`;
-  result={version:'V5.1-robustness',symbol:$('symbol').value,timeframe:$('tf').value,candles:cs.length,events:bt.events.length,closed:events.length,oosDefinition:'last 50% of closed events by chronological entry index',full, oos:baseOos, stress:scenarios.map(([name,rows])=>({name,...aggregate(rows)})),folds,costSensitivity:[0,.05,.1,.2,.3,.5].map(cost=>({costR:cost,...aggregate(oos,cost)})),riskFloorScenarios,setupAgeBands:ageBands,capturedSetupAge:setupAge,outlierDiagnostics:{top1R:top1,top3R,top3Contribution:concentration,oosWithoutTop1:without1,oosWithoutTop3:without3},audit,gate:{passed:gateIssues.length===0,issues:gateIssues},method:'Real Binance candles only. Stress tests operate on observed event returns; no synthetic market candles and no parameter fitting.'};
+  result={version:'V5.2-robustness',symbol:$('symbol').value,timeframe:$('tf').value,candles:cs.length,events:bt.events.length,closed:events.length,oosDefinition:'last 50% of closed events by chronological entry index',full, oos:baseOos, stress:scenarios.map(([name,rows])=>({name,...aggregate(rows)})),folds,costSensitivity:[0,.05,.1,.2,.3,.5].map(cost=>({costR:cost,...aggregate(oos,cost)})),riskFloorScenarios,riskFloorExclusion,setupAgeBands:ageBands,ageCapScenarios:ageCaps,capturedSetupAge:setupAge,outlierDiagnostics:{top1R:top1,top3R,top3Contribution:concentration,oosWithoutTop1:without1,oosWithoutTop3:without3},audit,gate:{passed:gateIssues.length===0,issues:gateIssues},method:'Real Binance candles only. Stress tests operate on observed event returns; no synthetic market candles and no parameter fitting.'};
   $('json').textContent=JSON.stringify(result,null,2);
  }catch(e){$('json').textContent='Erro: '+e.message;$('gate').textContent='ERRO: '+e.message}
  finally{b.disabled=false;b.textContent='EXECUTAR V5.1'}
 }
 $('run').onclick=run;
-$('save').onclick=()=>{if(!result){alert('Execute primeiro.');return}const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='gannwyck_v5_robustness_'+$('symbol').value+'_'+$('tf').value+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
+$('save').onclick=()=>{if(!result){alert('Execute primeiro.');return}const blob=new Blob([JSON.stringify(result,null,2)],{type:'application/json'}),u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;a.download='gannwyck_v5_2_robustness_'+$('symbol').value+'_'+$('tf').value+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(u),1000)};
 </script></body></html>
