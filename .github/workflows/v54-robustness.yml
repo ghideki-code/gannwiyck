@@ -1,0 +1,31 @@
+name: GannWyck V5.4 Robustness
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '47 */6 * * *'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node bot/run-v54.mjs
+        env:
+          SYMBOL: BTCUSDT
+          TIMEFRAMES: 1h,4h,12h,1d
+          MAX_CANDLES: 50000
+          MAX_BARS: 120
+          WARMUP: 100
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gannwyck-v54-${{ github.run_number }}
+          path: bot-results-v54/
+      - name: Publish summary
+        if: always()
+        run: cat bot-results-v54/SUMMARY.md >> "${GITHUB_STEP_SUMMARY}"
