@@ -31,9 +31,20 @@ function wilson(w,n,z=1.959963984540054){
 }
 function maxLossStreak(es){let s=0,m=0;for(const e of es){if(e.outcome==='stop'){s++;m=Math.max(m,s)}else if(e.outcome==='target')s=0}return m}
 function drawdown(es){
-  let eq=0,peak=0,maxDD=0,peakAt=0,troughAt=0,recoveryBars=null,lastPeakIndex=0,recovered=[];
-  for(let i=0;i<es.length;i++){eq+=Number(es[i].r)||0;if(eq>peak){peak=eq;peakAt=i;lastPeakIndex=i}const dd=peak-eq;if(dd>maxDD){maxDD=dd;troughAt=i}}
-  if(maxDD>0){let e=0,p=0;for(let i=0;i<es.length;i++){e+=Number(es[i].r)||0;if(e>=peak&&i>troughAt){recoveryBars=i-troughAt;break}}}
+  let eq=0,peak=0,maxDD=0,peakAt=0,troughAt=0,peakBeforeTrough=0,recoveryBars=null;
+  for(let i=0;i<es.length;i++){
+    eq+=Number(es[i].r)||0;
+    if(eq>peak){peak=eq;peakAt=i}
+    const dd=peak-eq;
+    if(dd>maxDD){maxDD=dd;troughAt=i;peakBeforeTrough=peak}
+  }
+  if(maxDD>0){
+    let e=0;
+    for(let i=0;i<es.length;i++){
+      e+=Number(es[i].r)||0;
+      if(i>troughAt&&e>=peakBeforeTrough){recoveryBars=i-troughAt;break}
+    }
+  }
   return {maxDrawdownR:maxDD,peakR:peak,finalR:eq,peakIndex:peakAt,troughIndex:troughAt,recoveryBars};
 }
 function concentration(es){
@@ -63,8 +74,16 @@ function iidBootstrap(rs,n,seed){
 function blockBootstrap(rs,n,block,seed){
   const rnd=seeded(seed), vals=[]; if(!rs.length)return null;
   const m=Math.max(1,Math.min(block,rs.length));
-  for(let b=0;b<n;b++){let s=0;while(true){const start=Math.floor(rnd()*rs.length);for(let j=0;j<m&&s!==null&&j<rs.length;j++){s+=rs[(start+j)%rs.length];if((j+1)+0>=rs.length)break}if(Math.ceil(rs.length/m)<=Math.ceil((rs.length)/m))break}
-    vals.push(s)}
+  for(let b=0;b<n;b++){
+    let s=0,drawn=0;
+    while(drawn<rs.length){
+      const start=Math.floor(rnd()*rs.length);
+      const take=Math.min(m,rs.length-drawn);
+      for(let j=0;j<take;j++)s+=rs[(start+j)%rs.length];
+      drawn+=take;
+    }
+    vals.push(s);
+  }
   return {block:m,n,mean:vals.reduce((a,b)=>a+b,0)/n,p05:quantile(vals,.05),p50:quantile(vals,.5),p95:quantile(vals,.95),probTotalPositive:vals.filter(x=>x>0).length/n};
 }
 function autocorrESS(rs){
@@ -137,7 +156,7 @@ function run(d,E){
   return {version:'V5.5-ROBUSTNESS',source:{exchange:'Binance Spot public market data',symbol:SYMBOL,timeframe:d.tf,candles:d.cs.length},rules:{realDataOnly:true,noSyntheticData:true,causal:true,parametersFrozen:true,noOosSelection:true},backtest:bt.summary,audit:{ok:audit.ok,events:audit.events,violations:audit.violations},candidates:candidatesOut,screens,notes:['V5.5 corrects the V5.4 top-3 concentration calculation by actually removing the largest positive closed events.','Bootstrap intervals are diagnostic; time-series dependence can make IID bootstrap inappropriate, so moving-block bootstrap is also reported.','No permutation of R values is used for total-R significance because permutation leaves the total unchanged.','Effective independent event count is a heuristic based on lag-1 autocorrelation, not a formal dependence model.','V5.5 never selects a winner and never authorizes live trading.'],events:rows};
 }
 (async()=>{await fs.mkdir(OUT,{recursive:true});const E=await engine(),all=[];
-for(const raw of TFS){const tf=raw.trim(),d=await data(tf),r=run(d,E);all.push(r);await fs.writeFile(path.join(OUT,SYMBOL+'_'+tf+'_V5.5.json'),JSON.stringify(r,null,2));console.log(tf,Object.fromEntries(Object.entries(r.candidates).map(([k,v])=>[k,{closed:v.all.closed,totalR:v.all.totalR,top3:v.robustness.removeTop.find(x=>x.k===3)?.totalR,blockP05:v.robustness.blockBootstrap.p05,secondHalf:v.robustness.secondHalf.totalR}])))}
+for(const raw of TFS){const tf=raw.trim(),d=await data(tf),r=run(d,E);all.push(r);await fs.writeFile(path.join(OUT,SYMBOL+'_'+tf+'_V5.5.json'),JSON.stringify(r,null,2));console.log(tf,Object.fromEntries(Object.entries(r.candidates).map(([k,v])=>[k,{closed:v.all.closed,totalR:v.all.totalR,top3:v.robustness.removeTop.find(x=>x.k===3)?.totalR,blockP05:v.robustness.blockBootstrap?.p05??null,secondHalf:v.robustness.secondHalf.totalR}])))}
 const summary={version:'V5.5-ROBUSTNESS',generatedAt:new Date().toISOString(),symbol:SYMBOL,timeframes:all.map(r=>({timeframe:r.source.timeframe,candles:r.source.candles,audit:r.audit,screens:r.screens,candidates:Object.fromEntries(Object.entries(r.candidates).map(([k,v])=>[k,{all:v.all,robustness:v.robustness}]))}))};
 await fs.writeFile(path.join(OUT,'summary.json'),JSON.stringify(summary,null,2));
 await fs.writeFile(path.join(OUT,'SUMMARY.md'),'# GannWyck V5.5 Robustness\n\n'+all.map(r=>'## '+r.source.timeframe+'\n'+Object.entries(r.candidates).map(([k,v])=>{const z=v.robustness;return '- **'+k+'**: '+v.all.closed+' closed, '+v.all.totalR.toFixed(2)+'R, top3-removal '+(z.removeTop.find(x=>x.k===3)?.totalR??NaN).toFixed(2)+'R, block-bootstrap P05 '+(z.blockBootstrap.p05??NaN).toFixed(2)+'R, second half '+z.secondHalf.totalR.toFixed(2)+'R'}).join('\n')).join('\n\n'))})();
