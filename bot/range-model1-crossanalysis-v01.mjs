@@ -192,6 +192,27 @@ function eventForRanges(cs,ranges,tf) {
      },
      cycleAudit
    };
+   audit.mfeMaeAudit = (function(){
+     const rows = audit.tap3Audit.events.map(e=>{
+       const start=e.entryIndex;
+       const end=Math.min(cs.length,start+120);
+       if(!Number.isInteger(start)||start>=end)return null;
+       let mfe=0,mae=0,mfeBar=null,maeBar=null;
+       for(let i=start;i<end;i++){
+         const c=cs[i];
+         const favorable=e.side==="LONG" ? (c.high-e.entry)/e.risk : (e.entry-c.low)/e.risk;
+         const adverse=e.side==="LONG" ? (e.entry-c.low)/e.risk : (c.high-e.entry)/e.risk;
+         if(favorable>mfe){mfe=favorable;mfeBar=i-start;}
+         if(adverse>mae){mae=adverse;maeBar=i-start;}
+       }
+       const outcomeBar=e.outcomeIndex!=null?e.outcomeIndex-start:null;
+       return {id:e.id,side:e.side,outcome:e.outcome,r:e.r,mfe:+mfe.toFixed(6),mae:+mae.toFixed(6),mfeBar,maeBar,outcomeBar};
+     }).filter(Boolean);
+     const closed=rows.filter(x=>x.outcome==="target"||x.outcome==="stop");
+     const median=a=>{const v=a.slice().sort((x,y)=>x-y);return v.length?v[Math.floor((v.length-1)/2)]:null;};
+     const avg=(a,k)=>a.length?a.reduce((s,x)=>s+(Number(x[k])||0),0)/a.length:null;
+     return {windowBars:120,n:closed.length,avgMFE:avg(closed,"mfe"),medianMFE:median(closed.map(x=>x.mfe)),avgMAE:avg(closed,"mae"),medianMAE:median(closed.map(x=>x.mae)),avgMFEBar:avg(closed,"mfeBar"),avgMAEBar:avg(closed,"maeBar"),avgOutcomeBar:avg(closed,"outcomeBar"),events:rows};
+   })();
    audit.rrAudit={
      closed:closed.length,
      rrDistribution:{n:rrValues.length,median:quantile(rrValues,.5),p75:quantile(rrValues,.75),p90:quantile(rrValues,.9),p95:quantile(rrValues,.95),max:quantile(rrValues,1)},
