@@ -1,0 +1,279 @@
+//@version=6
+indicator("GannWyck Range Research Engine V0.4", overlay=true, max_lines_count=500, max_boxes_count=200, max_labels_count=200)
+
+// Research tool only. This is NOT presented as the proprietary GannWyck Range formula.
+// Source-derived public concepts: Range as a structural "playground", market structure/BOS,
+// supply/demand and liquidity. Exact proprietary Range/secret-sauce mathematics are not public.
+
+groupStructure = "ESTRUTURA"
+pivotLen = input.int(5, "Força do pivô", minval=2, maxval=30, group=groupStructure)
+minRangeBars = input.int(12, "Mínimo de candles", minval=3, maxval=500, group=groupStructure)
+maxRangeBars = input.int(300, "Máximo de candles", minval=20, maxval=2000, group=groupStructure)
+minMidTouches = input.int(1, "Mínimo de retornos ao 50%", minval=0, maxval=50, group=groupStructure)
+maxHistoricalRanges = input.int(10, "Ranges históricos", minval=1, maxval=30, group=groupStructure)
+
+groupRange = "RANGE"
+invalidationMode = input.string("Fechamento", "Invalidação", options=["Fechamento","Máxima/Mínima"], group=groupRange)
+
+groupDisplay = "VISUAL"
+showPivots = input.bool(true, "Mostrar pivôs", group=groupDisplay)
+showRange = input.bool(true, "Mostrar Range ativo", group=groupDisplay)
+showHistory = input.bool(true, "Mostrar histórico", group=groupDisplay)
+showMidpoint = input.bool(true, "Mostrar 50%", group=groupDisplay)
+showDL = input.bool(true, "Mostrar DL (hipótese)", group=groupDisplay)
+
+groupTable = "TABELA"
+showTable = input.bool(true, "Mostrar tabela", group=groupTable)
+tableSize = input.string("Normal", "Tamanho", options=["Muito pequena","Pequena","Normal","Grande","Muito grande"], group=groupTable)
+tablePos = input.string("Superior direito", "Posição", options=["Superior esquerdo","Superior direito","Inferior esquerdo","Inferior direito"], group=groupTable)
+
+int txtSize = tableSize == "Muito pequena" ? 8 : tableSize == "Pequena" ? 10 : tableSize == "Normal" ? 14 : tableSize == "Grande" ? 20 : 28
+tablePosition = tablePos == "Superior esquerdo" ? position.top_left : tablePos == "Inferior esquerdo" ? position.bottom_left : tablePos == "Inferior direito" ? position.bottom_right : position.top_right
+
+ph = ta.pivothigh(high, pivotLen, pivotLen)
+pl = ta.pivotlow(low, pivotLen, pivotLen)
+
+var float lastPH = na
+var int lastPHBar = na
+var float lastPL = na
+var int lastPLBar = na
+
+if not na(ph)
+    lastPH := ph
+    lastPHBar := bar_index - pivotLen
+
+if not na(pl)
+    lastPL := pl
+    lastPLBar := bar_index - pivotLen
+
+plotshape(showPivots and not na(ph), title="Pivot High", style=shape.triangledown, location=location.abovebar, offset=-pivotLen, size=size.tiny)
+plotshape(showPivots and not na(pl), title="Pivot Low", style=shape.triangleup, location=location.belowbar, offset=-pivotLen, size=size.tiny)
+
+// -----------------------------------------------------------------------------
+// V0.4 STRUCTURAL DIAGNOSTICS
+// Research measurements only. They are not proprietary GannWyck rules.
+// They expose duration, width, midpoint interaction, boundary interaction,
+// internal candles and excursion so candidate Ranges can be audited.
+
+// ACTIVE RANGE STATE
+// -----------------------------------------------------------------------------
+var float activeHigh = na
+var float activeLow = na
+var int activeHighBar = na
+var int activeLowBar = na
+var int activeStart = na
+var int activeTouches = 0
+var int activeLastTouch = na
+var int activeInvalidationBar = na
+var int rangeId = 0
+var string activeDirection = "INDEFINIDO"
+var string activeState = "SEM RANGE"
+var string invalidationReason = ""
+var int activeBoundaryTouches = 0
+var int activeInternalBars = 0
+var float activeMaxMidExcursion = 0.0
+var float activeWidthPct = na
+
+// Historical diagnostics.
+var float[] histHigh = array.new_float()
+var float[] histLow = array.new_float()
+var int[] histHighBar = array.new_int()
+var int[] histLowBar = array.new_int()
+var int[] histStart = array.new_int()
+var int[] histEnd = array.new_int()
+var string[] histDirection = array.new_string()
+var string[] histState = array.new_string()
+var string[] histInvalidation = array.new_string()
+
+havePivots = not na(lastPH) and not na(lastPL)
+candidateHigh = havePivots ? lastPH : na
+candidateLow = havePivots ? lastPL : na
+candidateHighBar = havePivots ? lastPHBar : na
+candidateLowBar = havePivots ? lastPLBar : na
+candidateStart = havePivots ? math.min(candidateHighBar, candidateLowBar) : na
+candidateEnd = havePivots ? math.max(candidateHighBar, candidateLowBar) : na
+candidateBars = havePivots ? candidateEnd - candidateStart : na
+candidateSize = havePivots ? candidateHigh - candidateLow : na
+candidateStructural = havePivots and candidateSize > syminfo.mintick and candidateBars >= minRangeBars and candidateBars <= maxRangeBars
+candidateDirection = havePivots ? candidateLowBar < candidateHighBar ? "LOW → HIGH" : "HIGH → LOW" : "INDEFINIDO"
+
+// IMPORTANT: a new pivot does not replace a live Range.
+// Replacement is permitted only after structural invalidation.
+newCandidate = candidateStructural and
+     (na(activeHigh) or activeState == "INVALIDADO") and
+     (na(activeHigh) or candidateHigh != activeHigh or candidateLow != activeLow or
+     candidateHighBar != activeHighBar or candidateLowBar != activeLowBar)
+
+archiveActive() =>
+    if not na(activeHigh)
+        array.unshift(histHigh, activeHigh)
+        array.unshift(histLow, activeLow)
+        array.unshift(histHighBar, activeHighBar)
+        array.unshift(histLowBar, activeLowBar)
+        array.unshift(histStart, activeStart)
+        array.unshift(histEnd, na(activeInvalidationBar) ? bar_index - 1 : activeInvalidationBar)
+        array.unshift(histDirection, activeDirection)
+        array.unshift(histState, activeState)
+        array.unshift(histInvalidation, invalidationReason)
+        while array.size(histHigh) > maxHistoricalRanges
+            array.pop(histHigh)
+            array.pop(histLow)
+            array.pop(histHighBar)
+            array.pop(histLowBar)
+            array.pop(histStart)
+            array.pop(histEnd)
+            array.pop(histDirection)
+            array.pop(histState)
+            array.pop(histInvalidation)
+
+if newCandidate
+    archiveActive()
+    rangeId += 1
+    activeHigh := candidateHigh
+    activeLow := candidateLow
+    activeHighBar := candidateHighBar
+    activeLowBar := candidateLowBar
+    activeStart := candidateStart
+    activeTouches := 0
+    activeLastTouch := na
+    activeInvalidationBar := na
+    activeDirection := candidateDirection
+    activeBoundaryTouches := 0
+    activeInternalBars := 0
+    activeMaxMidExcursion := 0.0
+    activeWidthPct := candidateLow != 0 ? (candidateHigh - candidateLow) / math.abs(candidateLow) * 100.0 : na
+    activeState := "EM FORMAÇÃO"
+    invalidationReason := ""
+
+// -----------------------------------------------------------------------------
+// RANGE VALIDATION
+// -----------------------------------------------------------------------------
+activeSize = activeHigh - activeLow
+activeMid = activeLow + activeSize * 0.5
+activeBars = not na(activeStart) ? bar_index - activeStart : na
+
+midTouch = not na(activeHigh) and low <= activeMid and high >= activeMid
+if midTouch and (na(activeLastTouch) or bar_index > activeLastTouch + 1)
+    activeTouches += 1
+    activeLastTouch := bar_index
+
+durationOK = not na(activeBars) and activeBars >= minRangeBars and activeBars <= maxRangeBars
+midOK = activeTouches >= minMidTouches
+structureOK = not na(activeSize) and activeSize > syminfo.mintick
+boundaryTouch = structureOK and (high >= activeHigh or low <= activeLow)
+internalBar = structureOK and high < activeHigh and low > activeLow
+midExcursion = structureOK ? math.max(math.abs(high - activeMid), math.abs(low - activeMid)) / activeSize : na
+if activeState != "INVALIDADO" and structureOK
+    if boundaryTouch
+        activeBoundaryTouches += 1
+    if internalBar
+        activeInternalBars += 1
+    if not na(midExcursion)
+        activeMaxMidExcursion := math.max(activeMaxMidExcursion, midExcursion)
+
+if activeState != "INVALIDADO" and structureOK
+    activeState := durationOK and midOK ? "ATIVO" : "EM FORMAÇÃO"
+
+breakUp = activeState != "INVALIDADO" and not na(activeHigh) and
+     (invalidationMode == "Fechamento" ? close > activeHigh : high > activeHigh)
+
+breakDown = activeState != "INVALIDADO" and not na(activeLow) and
+     (invalidationMode == "Fechamento" ? close < activeLow : low < activeLow)
+
+if breakUp
+    activeState := "INVALIDADO"
+    invalidationReason := "ROMPIMENTO DO HIGH"
+    activeInvalidationBar := bar_index
+else if breakDown
+    activeState := "INVALIDADO"
+    invalidationReason := "ROMPIMENTO DO LOW"
+    activeInvalidationBar := bar_index
+
+// -----------------------------------------------------------------------------
+// DL: HYPOTHESIS ONLY
+// -----------------------------------------------------------------------------
+dl135 = activeState == "ATIVO" ? activeLow + activeSize * 1.35 : na
+dl0 = activeState == "ATIVO" ? activeLow : na
+dlm035 = activeState == "ATIVO" ? activeLow - activeSize * 0.35 : na
+dlHigh035 = activeState == "ATIVO" ? activeHigh + activeSize * 0.35 : na
+
+// -----------------------------------------------------------------------------
+// VISUAL OBJECTS
+// -----------------------------------------------------------------------------
+var box activeBox = na
+var line midLine = na
+var line dlA = na
+var line dlB = na
+var line dlC = na
+var line dlD = na
+var box[] historyBoxes = array.new_box()
+var line[] historyMids = array.new_line()
+
+if barstate.islast
+    if not na(activeBox)
+        box.delete(activeBox)
+    if not na(midLine)
+        line.delete(midLine)
+    if not na(dlA)
+        line.delete(dlA)
+    if not na(dlB)
+        line.delete(dlB)
+    if not na(dlC)
+        line.delete(dlC)
+    if not na(dlD)
+        line.delete(dlD)
+
+    if array.size(historyBoxes) > 0
+        for i = 0 to array.size(historyBoxes) - 1
+            box.delete(array.get(historyBoxes, i))
+        array.clear(historyBoxes)
+
+    if array.size(historyMids) > 0
+        for i = 0 to array.size(historyMids) - 1
+            line.delete(array.get(historyMids, i))
+        array.clear(historyMids)
+
+    if showHistory and array.size(histHigh) > 0
+        for i = 0 to array.size(histHigh) - 1
+            int hs = array.get(histStart, i)
+            int he = array.get(histEnd, i)
+            float hh = array.get(histHigh, i)
+            float hl = array.get(histLow, i)
+            float hm = hl + (hh - hl) * 0.5
+            box hb = box.new(hs, hh, he, hl, bgcolor=color.new(color.gray, 94), border_color=color.new(color.gray, 60), border_width=1)
+            line hmLine = line.new(hs, hm, he, hm, style=line.style_dotted, width=1, color=color.new(color.yellow, 40))
+            array.push(historyBoxes, hb)
+            array.push(historyMids, hmLine)
+
+    if showRange and activeState != "SEM RANGE" and not na(activeHigh)
+        activeBox := box.new(activeStart, activeHigh, bar_index, activeLow, bgcolor=color.new(color.blue, 90), border_color=color.blue, border_width=2)
+
+    if showMidpoint and activeState != "SEM RANGE" and not na(activeMid)
+        midLine := line.new(activeStart, activeMid, bar_index, activeMid, extend=extend.right, style=line.style_dashed, width=2, color=color.yellow)
+
+    if showDL and activeState == "ATIVO"
+        dlA := line.new(activeStart, dl135, bar_index, dl135, extend=extend.right, color=color.green)
+        dlB := line.new(activeStart, dl0, bar_index, dl0, extend=extend.right, color=color.white, width=2)
+        dlC := line.new(activeStart, dlm035, bar_index, dlm035, extend=extend.right, color=color.red)
+        dlD := line.new(activeStart, dlHigh035, bar_index, dlHigh035, extend=extend.right, color=color.orange)
+
+// -----------------------------------------------------------------------------
+// TABLE
+// -----------------------------------------------------------------------------
+var table t = table.new(tablePosition, 2, 16, frame_color=color.gray, frame_width=1, border_color=color.new(color.gray, 60), border_width=1)
+
+if barstate.islast
+    table.clear(t, 0, 0, 1, 15)
+    if showTable
+        statusColor = activeState == "ATIVO" ? color.lime : activeState == "INVALIDADO" ? color.red : color.yellow
+        vals = array.from("STATUS","RANGE ID","DIREÇÃO","HIGH","LOW","50%","DURAÇÃO","TOQUES 50%","BOUNDARY","INTERNAL","WIDTH %","EXCURSÃO","DURAÇÃO OK","MIDPOINT OK","INVALIDAÇÃO","HIST/CAND")
+        data = array.from(activeState, str.tostring(rangeId), activeDirection, str.tostring(activeHigh, format.mintick), str.tostring(activeLow, format.mintick), str.tostring(activeMid, format.mintick), str.tostring(activeBars), str.tostring(activeTouches), str.tostring(activeBoundaryTouches), str.tostring(activeInternalBars), str.tostring(activeWidthPct, "#.##"), str.tostring(activeMaxMidExcursion, "#.###"), durationOK ? "SIM" : "NÃO", midOK ? "SIM" : "NÃO", invalidationReason == "" ? "NÃO" : invalidationReason, str.tostring(array.size(histHigh)) + " / " + (candidateStructural ? candidateDirection : "SEM CANDIDATO"))
+        for row = 0 to 15
+            table.cell(t, 0, row, array.get(vals, row), text_color=color.white, text_size=txtSize, bgcolor=row == 0 ? color.new(color.blue, 20) : color.new(color.black, 10))
+            table.cell(t, 1, row, array.get(data, row), text_color=row == 0 ? statusColor : color.white, text_size=txtSize, bgcolor=row == 0 ? color.new(color.blue, 20) : color.new(color.black, 10))
+
+newActive = activeState == "ATIVO" and activeState[1] != "ATIVO"
+invalidated = activeState == "INVALIDADO" and activeState[1] != "INVALIDADO"
+
+alertcondition(newActive, "Range ativo", "GannWyck Range Research V0.4: novo Range ativo.")
+alertcondition(invalidated, "Range invalidado", "GannWyck Range Research V0.4: Range invalidado.")
