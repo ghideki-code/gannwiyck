@@ -195,7 +195,7 @@ function eventForRanges(cs,ranges,tf) {
    audit.mfeMaeAudit = (function(){
      const rows = audit.tap3Audit.events.map(e=>{
        const start=e.entryIndex;
-       const end=Math.min(cs.length,start+120);
+       const stopAt=Number.isInteger(e.outcomeIndex)?e.outcomeIndex+1:start+120; const end=Math.min(cs.length,start+120,stopAt);
        if(!Number.isInteger(start)||start>=end)return null;
        let mfe=0,mae=0,mfeBar=null,maeBar=null;
        for(let i=start;i<end;i++){
