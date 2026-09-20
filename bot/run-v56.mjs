@@ -77,7 +77,7 @@ async function engine(){
   vm.runInContext(await fs.readFile(path.join(ROOT,'src/research-stats.js'),'utf8'),s);
   return s.globalThis;
 }
-function run(d,E){
+function run(d,E,integrity){
   const M=E.GannWyckModel1,S=E.GannWyckResearchStats;
   const bt=M.backtestCausal(d.cs,{warmup:WARM,maxBars:MAXB});
   const rows=bt.events.map(e=>S.featureRow(e,d.cs));
@@ -108,7 +108,7 @@ function run(d,E){
 function fnv1(s){let h=2166136261;for(const ch of s){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
 (async()=>{
   await fs.mkdir(OUT,{recursive:true});const integrity=verifyFrozenSources(),E=await engine(),all=[];
-  for(const raw of TFS){const tf=raw.trim(),d=await data(tf),r=run(d,E);all.push(r);await fs.writeFile(path.join(OUT,SYMBOL+'_'+tf+'_V5.6.json'),JSON.stringify(r,null,2));
+  for(const raw of TFS){const tf=raw.trim(),d=await data(tf),r=run(d,E,integrity);all.push(r);await fs.writeFile(path.join(OUT,SYMBOL+'_'+tf+'_V5.6.json'),JSON.stringify(r,null,2));
     console.log(tf,{holdoutClosed:r.holdout.summary.closed,totalR:r.holdout.summary.totalR,top3:r.holdout.removeTop3.totalR,blockP05:r.holdout.blockBootstrap?.p05??null,allPass:r.holdout.allPass})}
   const summary={version:'V5.6-PROSPECTIVE-HOLDOUT',generatedAt:new Date().toISOString(),freeze:FREEZE_ISO,timeframes:all.map(r=>({timeframe:r.source.timeframe,candles:r.source.candles,historicalContext:r.historicalContext,holdout:r.holdout}))};
   await fs.writeFile(path.join(OUT,'summary.json'),JSON.stringify(summary,null,2));
