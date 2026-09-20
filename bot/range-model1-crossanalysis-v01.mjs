@@ -98,8 +98,5 @@ function eventForRanges(cs,ranges,tf) {
 
 // V0.3 cycle audit helper: groups Model 1 events by the same linked research Range.
 // A cycle is Range -> candidate T2 -> BOS -> T3 -> entry/outcome. Research only.
-function cycleAudit(events){
- const groups=new Map();
- for(const e of events){if(!e.rangeLink)continue;const key=[e.rangeLink.start,e.rangeLink.end,e.rangeLink.high,e.rangeLink.low].join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(e);}
- return [...groups.values()].map((es,i)=>({cycle:i+1,range:es[0].rangeLink,events:es.map(e=>({id:e.id,t2:e.t2,bos:e.bos,t3:e.t3,entryIndex:e.entryIndex,side:e.side,outcome:e.outcome,r:e.r})),eventCount:es.length,closed:es.filter(e=>e.outcome==='target'||e.outcome==='stop').length,totalR:es.filter(e=>Number.isFinite(e.r)).reduce((s,e)=>s+e.r,0)}));
-}
+function cycleAudit(events){const groups=new Map();for(const e of events){if(!e.rangeLink)continue;const key=[e.rangeLink.start,e.rangeLink.end,e.rangeLink.high,e.rangeLink.low].join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(e);}return [...groups.values()].map((es,i)=>({cycle:i+1,range:es[0].rangeLink,events:es.map(e=>({id:e.id,t2:e.t2,bos:e.bos,t3:e.t3,entryIndex:e.entryIndex,side:e.side,outcome:e.outcome,r:e.r})),eventCount:es.length,closed:es.filter(e=>e.outcome==='target'||e.outcome==='stop').length,totalR:es.filter(e=>Number.isFinite(e.r)).reduce((s,e)=>s+e.r,0)}));}
+function cycleSummary(events){const cycles=cycleAudit(events);const multi=cycles.filter(c=>c.eventCount>1);return{cycles:cycles.length,multiEventCycles:multi.length,events:events.length,closed:events.filter(e=>e.outcome==='target'||e.outcome==='stop').length,totalR:events.filter(e=>Number.isFinite(e.r)).reduce((s,e)=>s+e.r,0),multiEventR:multi.reduce((s,c)=>s+c.totalR,0),maxEventsPerRange:cycles.length?Math.max(...cycles.map(c=>c.eventCount)):0,cycles};}
