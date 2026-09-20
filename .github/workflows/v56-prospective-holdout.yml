@@ -1,0 +1,32 @@
+name: GannWyck V5.6 Prospective Holdout
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node bot/run-v56.mjs
+        env:
+          TIMEFRAMES: 1h,4h,12h,1d
+          MAX_CANDLES: 50000
+          MAX_BARS: 120
+          WARMUP: 100
+          BOOTSTRAPS: 5000
+          FREEZE_ISO: '2026-09-20T00:15:00Z'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gannwyck-v56-${{ github.run_number }}
+          path: bot-results-v56/
+      - name: Publish summary
+        if: always()
+        run: cat bot-results-v56/SUMMARY.md >> "${GITHUB_STEP_SUMMARY}"
