@@ -35,6 +35,25 @@ jobs:
           name: gannwyck-range-cycle-${{ github.run_number }}
           path: range-cycle-research.json
           retention-days: 30
-      - name: Publish cycle summary
+      - name: Publish V0.4 robustness summary
         if: always()
-        run: cat range-cycle-research.json | head -c 12000 >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const d=require('./range-cycle-research.json');
+          console.log('# V0.4 RR robustness diagnostics');
+          for(const x of d.results){
+            const a=x.rrAudit||{};
+            console.log('\n## '+x.tf);
+            console.log(JSON.stringify({
+              closed:a.closed,
+              rrDistribution:a.rrDistribution,
+              top1R:a.top1R,
+              top3R:a.top3R,
+              top1Share:a.top1Share,
+              top3Share:a.top3Share,
+              capSensitivity:a.capSensitivity,
+              oneEventPerResearchRange:a.oneEventPerResearchRange,
+              mechanics:a.mechanics
+            },null,2));
+          }
+          NODE
