@@ -1,0 +1,57 @@
+name: GannWyck HTF Accelerated Research
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  htf-research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run real Binance HTF research
+        env:
+          SYMBOL: BTCUSDT
+          TIMEFRAMES: 2d,3d,5d,1w,1M
+          MAX_CANDLES: 5000
+          PIVOT_LEN: 5
+          MIN_BARS: 12
+          MAX_BARS: 300
+        run: node bot/range-model1-crossanalysis-v01.mjs > range-cycle-htf.json
+      - name: Upload HTF research
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gannwyck-htf-${{ github.run_number }}
+          path: range-cycle-htf.json
+          retention-days: 30
+      - name: Publish HTF summary
+        if: always()
+        run: |
+          node - <<'NODE' | tee -a "$GITHUB_STEP_SUMMARY"
+          const d=require('./range-cycle-htf.json');
+          console.log('# Accelerated HTF research');
+          for(const x of d.results){
+            console.log('\n## '+x.tf);
+            console.log(JSON.stringify({
+              signals:x.summary?.signals,
+              closed:x.summary?.closed,
+              totalR:x.summary?.totalR,
+              winRate:x.summary?.winRate,
+              rrAudit:x.rrAudit,
+              tap3Audit:x.tap3Audit,
+              mfeMaeAudit:x.mfeMaeAudit,
+              mfeMaeGroups:x.mfeMaeGroups
+            },null,2));
+          }
+          NODE
