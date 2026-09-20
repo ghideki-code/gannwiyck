@@ -143,6 +143,44 @@ function eventForRanges(cs,ranges,tf) {
      const k=e.rangeLink?[e.rangeLink.start,e.rangeLink.end,e.rangeLink.high,e.rangeLink.low].join("|"):"NO_RANGE";
      if(!seenRanges.has(k)){seenRanges.add(k);onePerRange.push(e);}
    }
+   const eventMechanics=closed.map(e=>({
+     id:e.id,side:e.side,t2:e.t2,t3:e.t3,bos:e.bos,
+     t2ToBos:e.bos!=null?e.bos-e.t2:null,
+     bosToT3:e.bos!=null?e.t3-e.bos:null,
+     t3ToEntry:e.entryIndex!=null?e.entryIndex-e.t3:null,
+     rangeSize:e.rangeSize,
+     risk:e.risk,reward:e.reward,rr:e.rr,r:e.r,
+     stopToRange:e.rangeSize?+(e.risk/e.rangeSize).toFixed(6):null,
+     targetToRange:e.rangeSize?+(e.reward/e.rangeSize).toFixed(6):null,
+     t3DistanceToRange:e.rangeSize?+(Math.abs(e.t3Price-(e.side==="LONG"?e.rangeLow:e.rangeHigh))/e.rangeSize).toFixed(6):null
+   }));
+   const byCycle=new Map();
+   for(const e of closed){
+     const k=e.rangeLink?[e.rangeLink.start,e.rangeLink.end,e.rangeLink.high,e.rangeLink.low].join("|"):"NO_RANGE";
+     if(!byCycle.has(k)) byCycle.set(k,[]);
+     byCycle.get(k).push(e);
+   }
+   const cycleAudit=[...byCycle.values()].map(es=>({
+     rangeStart:es[0]?.rangeLink?.start??null,
+     rangeEnd:es[0]?.rangeLink?.end??null,
+     events:es.length,
+     totalR:+es.reduce((s,e)=>s+e.r,0).toFixed(6),
+     maxR:+Math.max(...es.map(e=>e.r)).toFixed(6),
+     wins:es.filter(e=>e.outcome==="target").length,
+     losses:es.filter(e=>e.outcome==="stop").length,
+     t3ToEntry:es.map(e=>e.entryIndex!=null?e.entryIndex-e.t3:null).filter(x=>x!=null)
+   }));
+   audit.tap3Audit={
+     events:eventMechanics,
+     summary:{
+       avgT2ToBOS:closed.length?+(closed.reduce((s,e)=>s+(e.bos!=null?e.bos-e.t2:0),0)/closed.length).toFixed(3):null,
+       avgBOSToT3:closed.length?+(closed.reduce((s,e)=>s+(e.bos!=null?e.t3-e.bos:0),0)/closed.length).toFixed(3):null,
+       avgT3ToEntry:closed.length?+(closed.reduce((s,e)=>s+(e.entryIndex!=null?e.entryIndex-e.t3:0),0)/closed.length).toFixed(3):null,
+       avgStopToRange:closed.length?+(closed.reduce((s,e)=>s+(e.risk/e.rangeSize),0)/closed.length).toFixed(6):null,
+       avgTargetToRange:closed.length?+(closed.reduce((s,e)=>s+(e.reward/e.rangeSize),0)/closed.length).toFixed(6):null
+     },
+     cycleAudit
+   };
    audit.rrAudit={
      closed:closed.length,
      rrDistribution:{n:rrValues.length,median:quantile(rrValues,.5),p75:quantile(rrValues,.75),p90:quantile(rrValues,.9),p95:quantile(rrValues,.95),max:quantile(rrValues,1)},
@@ -166,7 +204,7 @@ function eventForRanges(cs,ranges,tf) {
    };
    result.push(audit);
  }
- console.log(JSON.stringify({version:"V0.4",symbol:SYMBOL,source:"Binance Spot REST",maxCandles:MAX_CANDLES,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
+ console.log(JSON.stringify({version:"V0.5",symbol:SYMBOL,source:"Binance Spot REST",maxCandles:MAX_CANDLES,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
 })().catch(e=>{console.error(e);process.exit(1);});
 
 // V0.3 cycle audit helper: groups Model 1 events by the same linked research Range.
