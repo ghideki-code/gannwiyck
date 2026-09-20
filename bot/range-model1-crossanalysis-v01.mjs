@@ -10,21 +10,22 @@ const M = sandbox.globalThis.GannWyckModel1;
 
 const SYMBOL = process.env.SYMBOL || "BTCUSDT";
 const MAX_CANDLES = Math.max(200, Number(process.env.MAX_CANDLES || 5000));
-const TIMEFRAMES = (process.env.TIMEFRAMES || "1h,4h,12h,1d").split(",").map(s=>s.trim()).filter(Boolean);
+const TIMEFRAMES = (process.env.TIMEFRAMES || "1h,4h,12h,1d,2d,3d,5d,1w,1M").split(",").map(s=>s.trim()).filter(Boolean);
 const PIVOT_LEN = Number(process.env.PIVOT_LEN || 5);
 const MIN_BARS = Number(process.env.MIN_BARS || 12);
 const MAX_BARS = Number(process.env.MAX_BARS || 300);
 
 async function fetchKlines(interval) {
   const BASE = "https://data-api.binance.vision/api/v3/klines";
-  const ms = ({"1h":3600000,"4h":14400000,"12h":43200000,"1d":86400000})[interval];
-  let end = Date.now() - (ms || 0), all = [];
-  while (all.length < MAX_CANDLES) {
+  const customDays = interval==="2d"||interval==="5d";
+  const nativeMs = ({"1h":3600000,"4h":14400000,"12h":43200000,"1d":86400000,"3d":259200000,"1w":604800000,"1M":2592000000})[interval];
+  const sourceInterval = customDays ? "1d" : interval;
+  const sourceNeed = customDays ? MAX_CANDLES*Number(interval.slice(0,-1))+20 : MAX_CANDLES;
+  let end = Date.now() - (nativeMs || 86400000), all = [];
+  while (all.length < sourceNeed) {
     const u = new URL(BASE);
-    u.searchParams.set("symbol", SYMBOL);
-    u.searchParams.set("interval", interval);
-    u.searchParams.set("limit", "1000");
-    u.searchParams.set("endTime", String(end));
+    u.searchParams.set("symbol", SYMBOL); u.searchParams.set("interval", sourceInterval);
+    u.searchParams.set("limit", "1000"); u.searchParams.set("endTime", String(end));
     let rows = null;
     for (let attempt=1; attempt<=5; attempt++) {
       const r = await fetch(u);
@@ -38,9 +39,14 @@ async function fetchKlines(interval) {
     end = Number(rows[0][0]) - 1;
     await new Promise(x=>setTimeout(x, 80));
   }
-  const byOpen = new Map();
-  for (const x of all) byOpen.set(Number(x[0]), x);
-  return [...byOpen.values()].sort((a,b)=>Number(a[0])-Number(b[0])).slice(-MAX_CANDLES);
+  const byOpen = new Map(); for (const x of all) byOpen.set(Number(x[0]), x);
+  let rows=[...byOpen.values()].sort((a,b)=>Number(a[0])-Number(b[0]));
+  if(customDays){
+    const n=Number(interval.slice(0,-1)), day=86400000, groups=new Map();
+    for(const x of rows){ const bucket=Math.floor(Number(x[0])/day/n)*n; let g=groups.get(bucket); if(!g){g={t:bucket,o:Number(x[1]),h:Number(x[2]),l:Number(x[3]),c:Number(x[4]),v:Number(x[5]),ct:Number(x[6]),q:Number(x[7]),tr:Number(x[8]),tb:Number(x[9]),tq:Number(x[10])};groups.set(bucket,g);} else {g.h=Math.max(g.h,Number(x[2]));g.l=Math.min(g.l,Number(x[3]));g.c=Number(x[4]);g.v+=Number(x[5]);g.ct=Number(x[6]);g.q+=Number(x[7]);g.tr+=Number(x[8]);g.tb+=Number(x[9]);g.tq+=Number(x[10]);} }
+    rows=[...groups.values()].sort((a,b)=>a.t-b.t).map(g=>[g.t,String(g.o),String(g.h),String(g.l),String(g.c),String(g.v),g.ct,String(g.q),g.tr,String(g.tb),String(g.tq),"0"]);
+  }
+  return rows.slice(-MAX_CANDLES);
 }
 function pivots(c,i,type) {
   if(i<PIVOT_LEN || i>=c.length-PIVOT_LEN) return false;
