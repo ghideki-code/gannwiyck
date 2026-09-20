@@ -1,5 +1,6 @@
 name: GannWyck V5.6 Prospective Holdout
 # Frozen prospective validation, do not alter freeze or model assumptions.
+# Trigger after V5.6 runtime-scope fix.
 on:
   workflow_dispatch:
   push:
