@@ -151,7 +151,7 @@ function eventForRanges(cs,ranges,tf) {
    }
    const eventMechanics=closed.map(e=>({
      t3Price:cs[e.t3]?.close??null,
-     id:e.id,side:e.side,t2:e.t2,t3:e.t3,bos:e.bos,
+     id:e.id,side:e.side,t2:e.t2,t3:e.t3,bos:e.bos,entryIndex:e.entryIndex,outcomeIndex:e.outcomeIndex,
      t2ToBos:e.bos!=null?e.bos-e.t2:null,
      bosToT3:e.bos!=null?e.t3-e.bos:null,
      t3ToEntry:e.entryIndex!=null?e.entryIndex-e.t3:null,
