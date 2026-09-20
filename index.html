@@ -22,6 +22,18 @@ body{font-size:15px}
 .section{padding:16px 0}.st{font-size:11px;margin-bottom:10px}.rows{gap:9px}.row{font-size:12px}.row span:last-child{font-size:12px}.story{gap:6px}.node{padding:10px 3px}.node strong{font-size:11px}.node small{font-size:9px}.json{font-size:10px;line-height:1.5;max-height:170px}
 .research{padding:18px}.grid{gap:9px}.researchbox{padding:13px}.researchbox b{font-size:24px}.bt{font-size:12px}.bt th,.bt td{padding:9px}.bt th{font-size:9px}
 @media(max-width:1050px){.main{grid-template-columns:1fr}.side{max-height:none}.chart{height:600px}}
+</style>
+<style id="gw-large-ui">
+/* Large-display readability mode. Visual only, model calculations untouched. */
+html{font-size:16px!important}
+body{font-size:16px!important}
+.top{height:82px!important;padding:0 26px!important}.brand{min-width:285px!important}.mark{width:48px!important;height:48px!important}.brand b{font-size:17px!important}.brand small{font-size:11px!important}.pill,select,button{height:44px!important;font-size:14px!important}.pill{padding:0 14px!important}.auto{font-size:12px!important}
+.main{grid-template-columns:minmax(0,1fr) 560px!important}
+.tabs{height:56px!important;padding:0 20px!important}.tab{height:40px!important;font-size:14px!important}.status{font-size:12px!important}
+.chart{height:calc(100vh - 350px)!important;min-height:560px!important}.chartmsg{font-size:13px!important}.legend span{font-size:12px!important;padding:8px 10px!important}
+.bottom{height:210px!important}.card{padding:20px!important}.ey{font-size:12px!important}.big{font-size:27px!important}.sm{font-size:13px!important}
+.side{padding:22px!important;max-height:calc(100vh - 82px)!important}.head h2{font-size:19px!important}.live{font-size:11px!important}.signal{padding:24px!important}.badge{font-size:12px!important}.sidebig{font-size:50px!important}.price{font-size:14px!important}.metrics{gap:11px!important}.metric{padding:15px!important}.metric label{font-size:11px!important}.metric b{font-size:19px!important}.section{padding:19px 0!important}.st{font-size:12px!important}.row{font-size:13px!important}.row span:last-child{font-size:13px!important}.node{padding:12px 4px!important}.node strong{font-size:12px!important}.node small{font-size:10px!important}.json{font-size:11px!important;max-height:220px!important}
+@media(max-width:1050px){.main{grid-template-columns:1fr!important}.side{max-height:none!important}.chart{height:650px!important}}
 </style></head>
 <body>
 <header class="top"><div class="brand"><div class="mark">GW</div><div><b>GannWyck Terminal</b><small>Model 1 · Live Research Lab</small></div></div><div class="ticker"><i class="dot"></i><span id="symbolPill" class="pill">BTCUSDT</span><span id="pricePill" class="pill">--</span></div><div class="tools"><select id="symbol"><option>BTCUSDT</option><option>ETHUSDT</option><option>SOLUSDT</option></select><select id="interval"><option value="15m">15M</option><option value="30m">30M</option><option value="1h">1H</option><option value="4h">4H</option><option value="8h">8H</option><option value="12h">12H</option><option value="1d" selected>1D</option><option value="3d">3D</option><option value="5d">5D</option><option value="1w">1W</option><option value="1M">1M</option><option value="2M">2M</option></select><select id="limit" class="optional"><option>200</option><option selected>500</option><option>1000</option></select><label class="auto"><input id="auto" type="checkbox" checked> LIVE <span id="countdown">15s</span></label><button id="load" class="primary">Atualizar</button></div></header>
