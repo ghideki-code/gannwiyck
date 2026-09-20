@@ -53,7 +53,8 @@ jobs:
               top3Share:a.top3Share,
               capSensitivity:a.capSensitivity,
               oneEventPerResearchRange:a.oneEventPerResearchRange,
-              mechanics:a.mechanics
+              mechanics:a.mechanics,
+              tap3Audit:a.tap3Audit
             },null,2));
           }
           NODE
