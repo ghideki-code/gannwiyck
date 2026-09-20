@@ -67,13 +67,13 @@ async function data(tf){
 }
 function verifyFrozenSources(){
   const sha=p=>execFileSync('git',['hash-object',p],{encoding:'utf8'}).trim();
-  const model=sha('src/gannwyck-model1.js'),stats=sha('src/research-stats.js');
+  const model=sha('src/gannwyck-model1-frozen-v56.js'),stats=sha('src/research-stats.js');
   if(model!==FROZEN_MODEL_BLOB_SHA||stats!==FROZEN_STATS_BLOB_SHA){throw Error('FROZEN_SOURCE_INTEGRITY_FAILED model='+model+' stats='+stats)}
   return {modelBlobSha:model,statsBlobSha:stats};
 }
 async function engine(){
   const s={console,globalThis:{}};vm.createContext(s);
-  vm.runInContext(await fs.readFile(path.join(ROOT,'src/gannwyck-model1.js'),'utf8'),s);
+  vm.runInContext(await fs.readFile(path.join(ROOT,'src/gannwyck-model1-frozen-v56.js'),'utf8'),s);
   vm.runInContext(await fs.readFile(path.join(ROOT,'src/research-stats.js'),'utf8'),s);
   return s.globalThis;
 }
