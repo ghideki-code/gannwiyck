@@ -131,9 +131,42 @@ function eventForRanges(cs,ranges,tf) {
    const raw=await fetchKlines(tf);
    const cs=M.normalizeCandles(raw.map(x=>({time:x[0],open:x[1],high:x[2],low:x[3],close:x[4],volume:x[5]})));
    const ranges=buildRanges(cs);
-   result.push(eventForRanges(cs,ranges,tf));
+   const audit=eventForRanges(cs,ranges,tf);
+   const closed=audit.events.filter(e=>e.outcome==="target"||e.outcome==="stop");
+   const sorted=[...closed].sort((a,b)=>b.r-a.r);
+   const quantile=(xs,p)=>xs.length?xs[Math.min(xs.length-1,Math.floor((xs.length-1)*p))]:null;
+   const rrValues=closed.map(e=>e.rr).sort((a,b)=>a-b);
+   const caps=[2,3,5,10].map(cap=>({cap,totalR:+closed.reduce((s,e)=>s+(e.outcome==="target"?Math.min(e.r,cap):-1),0).toFixed(6)}));
+   const topR=n=>sorted.slice(0,n).reduce((s,e)=>s+e.r,0);
+   const seenRanges=new Set(),onePerRange=[];
+   for(const e of [...closed].sort((a,b)=>a.t2-b.t2)){
+     const k=e.rangeLink?[e.rangeLink.start,e.rangeLink.end,e.rangeLink.high,e.rangeLink.low].join("|"):"NO_RANGE";
+     if(!seenRanges.has(k)){seenRanges.add(k);onePerRange.push(e);}
+   }
+   audit.rrAudit={
+     closed:closed.length,
+     rrDistribution:{n:rrValues.length,median:quantile(rrValues,.5),p75:quantile(rrValues,.75),p90:quantile(rrValues,.9),p95:quantile(rrValues,.95),max:quantile(rrValues,1)},
+     top1R:+topR(1).toFixed(6),
+     top3R:+topR(3).toFixed(6),
+     top1Share:audit.linkedClosedR?+(topR(1)/audit.linkedClosedR).toFixed(6):null,
+     top3Share:audit.linkedClosedR?+(topR(3)/audit.linkedClosedR).toFixed(6):null,
+     capSensitivity:caps,
+     oneEventPerResearchRange:{
+       selection:"earliest closed event by T2 within each research Range; outcome-blind",
+       ranges:onePerRange.length,
+       totalR:+onePerRange.reduce((s,e)=>s+e.r,0).toFixed(6),
+       wins:onePerRange.filter(e=>e.outcome==="target").length,
+       losses:onePerRange.filter(e=>e.outcome==="stop").length
+     },
+     mechanics:{
+       avgRiskToRange:closed.length?+(closed.reduce((s,e)=>s+(e.risk/e.rangeSize),0)/closed.length).toFixed(6):null,
+       avgRewardToRange:closed.length?+(closed.reduce((s,e)=>s+(e.reward/e.rangeSize),0)/closed.length).toFixed(6):null,
+       maxRRTrade:sorted[0]?{id:sorted[0].id,rr:sorted[0].rr,r:sorted[0].r,side:sorted[0].side,t2:sorted[0].t2,t3:sorted[0].t3}:null
+     }
+   };
+   result.push(audit);
  }
- console.log(JSON.stringify({version:"V0.3",symbol:SYMBOL,source:"Binance Spot REST",maxCandles:MAX_CANDLES,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
+ console.log(JSON.stringify({version:"V0.4",symbol:SYMBOL,source:"Binance Spot REST",maxCandles:MAX_CANDLES,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
 })().catch(e=>{console.error(e);process.exit(1);});
 
 // V0.3 cycle audit helper: groups Model 1 events by the same linked research Range.
