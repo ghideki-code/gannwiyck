@@ -3,9 +3,6 @@ indicator("GannWyck Range Research Engine V0.2", overlay=true, max_lines_count=3
 
 // Research tool only. This is not presented as the proprietary GannWyck Range formula.
 
-//====================================================
-// INPUTS
-//====================================================
 groupStructure = "ESTRUTURA"
 pivotLen = input.int(5, "Força do pivô", minval=2, maxval=30, group=groupStructure)
 minRangeBars = input.int(12, "Mínimo de candles", minval=3, maxval=500, group=groupStructure)
@@ -29,11 +26,8 @@ tableSize = input.string("Normal", "Tamanho", options=["Muito pequena","Pequena"
 tablePos = input.string("Superior direito", "Posição", options=["Superior esquerdo","Superior direito","Inferior esquerdo","Inferior direito"], group=groupTable)
 
 int txtSize = tableSize == "Muito pequena" ? 8 : tableSize == "Pequena" ? 10 : tableSize == "Normal" ? 14 : tableSize == "Grande" ? 20 : 28
-string pos = tablePos == "Superior esquerdo" ? position.top_left : tablePos == "Inferior esquerdo" ? position.bottom_left : tablePos == "Inferior direito" ? position.bottom_right : position.top_right
+tablePosition = tablePos == "Superior esquerdo" ? position.top_left : tablePos == "Inferior esquerdo" ? position.bottom_left : tablePos == "Inferior direito" ? position.bottom_right : position.top_right
 
-//====================================================
-// PIVÔS
-//====================================================
 ph = ta.pivothigh(high, pivotLen, pivotLen)
 pl = ta.pivotlow(low, pivotLen, pivotLen)
 
@@ -53,30 +47,23 @@ if not na(pl)
 plotshape(showPivots and not na(ph), title="Pivot High", style=shape.triangledown, location=location.abovebar, offset=-pivotLen, size=size.tiny)
 plotshape(showPivots and not na(pl), title="Pivot Low", style=shape.triangleup, location=location.belowbar, offset=-pivotLen, size=size.tiny)
 
-//====================================================
-// RANGE STATE
-//====================================================
 var float activeHigh = na
 var float activeLow = na
 var int activeHighBar = na
 var int activeLowBar = na
 var int activeStart = na
-var int activeCreatedBar = na
 var int activeTouches = 0
 var int activeLastTouch = na
 var int rangeId = 0
 var string activeState = "SEM RANGE"
 var string invalidationReason = ""
 
-// Historical range arrays
 var float[] histHigh = array.new_float()
 var float[] histLow = array.new_float()
 var int[] histStart = array.new_int()
 var int[] histEnd = array.new_int()
 var string[] histState = array.new_string()
 
-// A new candidate is created only when both structural pivots exist and their
-// ordering defines an oriented leg. The range is not immediately called active.
 havePivots = not na(lastPH) and not na(lastPL)
 candidateHigh = havePivots ? lastPH : na
 candidateLow = havePivots ? lastPL : na
@@ -89,10 +76,8 @@ candidateSize = havePivots ? candidateHigh - candidateLow : na
 candidateMid = havePivots ? candidateLow + candidateSize * 0.5 : na
 candidateUp = havePivots and candidateLowBar < candidateHighBar
 candidateDown = havePivots and candidateHighBar < candidateLowBar
-
 candidateStructural = havePivots and candidateSize > syminfo.mintick and candidateBars >= minRangeBars and candidateBars <= maxRangeBars
 
-// Start/rebuild only when the structural pair changes.
 pairChanged = candidateStructural and (na(activeHigh) or candidateHigh != activeHigh or candidateLow != activeLow or candidateHighBar != activeHighBar or candidateLowBar != activeLowBar)
 
 if pairChanged
@@ -109,20 +94,17 @@ if pairChanged
             array.pop(histEnd)
             array.pop(histState)
 
+    rangeId += 1
     activeHigh := candidateHigh
     activeLow := candidateLow
     activeHighBar := candidateHighBar
     activeLowBar := candidateLowBar
     activeStart := candidateStart
-    activeCreatedBar := bar_index
     activeTouches := 0
     activeLastTouch := na
     activeState := "EM FORMAÇÃO"
     invalidationReason := ""
 
-//====================================================
-// ACTIVE RANGE VALIDATION
-//====================================================
 activeSize = activeHigh - activeLow
 activeMid = activeLow + activeSize * 0.5
 activeBars = not na(activeStart) ? bar_index - activeStart : na
@@ -139,7 +121,6 @@ structureOK = not na(activeSize) and activeSize > syminfo.mintick
 if activeState != "INVALIDADO" and structureOK
     activeState := durationOK and midOK ? "ATIVO" : "EM FORMAÇÃO"
 
-// Invalidation is deliberately explicit and configurable.
 breakUp = activeState != "INVALIDADO" and not na(activeHigh) and (invalidationMode == "Fechamento" ? close > activeHigh : high > activeHigh)
 breakDown = activeState != "INVALIDADO" and not na(activeLow) and (invalidationMode == "Fechamento" ? close < activeLow : low < activeLow)
 
@@ -150,17 +131,11 @@ else if breakDown
     activeState := "INVALIDADO"
     invalidationReason := "ROMPIMENTO DO LOW"
 
-//====================================================
-// DL HYPOTHESIS
-//====================================================
 dl135 = activeState == "ATIVO" ? activeLow + activeSize * 1.35 : na
 dl0 = activeState == "ATIVO" ? activeLow : na
 dlm035 = activeState == "ATIVO" ? activeLow - activeSize * 0.35 : na
 dlHigh035 = activeState == "ATIVO" ? activeHigh + activeSize * 0.35 : na
 
-//====================================================
-// VISUAL RANGE
-//====================================================
 var box activeBox = na
 var line midLine = na
 var line dlA = na
@@ -194,13 +169,10 @@ if barstate.islast
         dlC := line.new(activeStart, dlm035, bar_index, dlm035, extend=extend.right, color=color.red)
         dlD := line.new(activeStart, dlHigh035, bar_index, dlHigh035, extend=extend.right, color=color.orange)
 
-// Historical boxes are represented by lines only to avoid object churn.
-if showHistory and pairChanged and array.size(histHigh) > 0
-    // Historical ranges are retained in arrays for diagnostics.
-//====================================================
-// TABLE
-//====================================================
-var table t = table.new(pos, 2, 15, frame_color=color.gray, frame_width=1, border_color=color.new(color.gray, 60), border_width=1)
+// Historical ranges are retained in arrays for diagnostics.
+// Their full visual rendering will be added after the state logic is validated.
+
+var table t = table.new(tablePosition, 2, 15, frame_color=color.gray, frame_width=1, border_color=color.new(color.gray, 60), border_width=1)
 
 if barstate.islast
     table.clear(t, 0, 0, 1, 14)
@@ -213,9 +185,6 @@ if barstate.islast
             table.cell(t, 0, row, array.get(vals, row), text_color=color.white, text_size=txtSize, bgcolor=row == 0 ? color.new(color.blue, 20) : color.new(color.black, 10))
             table.cell(t, 1, row, array.get(data, row), text_color=row == 0 ? statusColor : color.white, text_size=txtSize, bgcolor=row == 0 ? color.new(color.blue, 20) : color.new(color.black, 10))
 
-//====================================================
-// ALERTS
-//====================================================
 newActive = activeState == "ATIVO" and activeState[1] != "ATIVO"
 invalidated = activeState == "INVALIDADO" and activeState[1] != "INVALIDADO"
 
