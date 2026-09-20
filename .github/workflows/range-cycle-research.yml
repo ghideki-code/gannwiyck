@@ -38,7 +38,7 @@ jobs:
       - name: Publish V0.4 robustness summary
         if: always()
         run: |
-          node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          node - <<'NODE' | tee -a "$GITHUB_STEP_SUMMARY"
           const d=require('./range-cycle-research.json');
           console.log('# V0.4 RR robustness diagnostics');
           for(const x of d.results){
