@@ -55,7 +55,8 @@ jobs:
               oneEventPerResearchRange:a.oneEventPerResearchRange,
               mechanics:a.mechanics,
               tap3Audit:a.tap3Audit,
-              mfeMaeAudit:a.mfeMaeAudit
+              mfeMaeAudit:a.mfeMaeAudit,
+              mfeMaeGroups:a.mfeMaeGroups
             },null,2));
           }
           NODE
