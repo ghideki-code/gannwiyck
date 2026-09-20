@@ -22,7 +22,7 @@ jobs:
       - name: Run real Binance cycle research
         env:
           SYMBOL: BTCUSDT
-          TIMEFRAMES: 1h,4h,12h,1d
+          TIMEFRAMES: 1h,4h,12h,1d,2d,3d,5d,1w,1M
           MAX_CANDLES: 5000
           PIVOT_LEN: 5
           MIN_BARS: 12
