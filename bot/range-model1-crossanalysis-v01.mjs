@@ -152,7 +152,7 @@ function eventForRanges(cs,ranges,tf) {
      rangeSize:e.rangeSize,
      risk:e.risk,reward:e.reward,rr:e.rr,r:e.r,
      stopToRange:e.rangeSize?+(e.risk/e.rangeSize).toFixed(6):null,
-     targetToRange:e.rangeSize?+(e.reward/e.rangeSize).toFixed(6):null,
+     targetToRange:e.rangeSize?+(e.reward/e.rangeSize).toFixed(6):null,outcome:e.outcome,r:e.r,
      t3DistanceToRange:(e.rangeSize&&Number.isFinite(cs[e.t3]?.close))?+(Math.abs(cs[e.t3].close-(e.side==="LONG"?e.rangeLow:e.rangeHigh))/e.rangeSize).toFixed(6):null
    }));
    function groupStats(rows,keyFn){const groups=new Map();for(const e of rows){const k=keyFn(e);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(e);}return [...groups.entries()].map(([group,es])=>({group,n:es.length,wins:es.filter(e=>e.outcome==="target").length,losses:es.filter(e=>e.outcome==="stop").length,totalR:+es.reduce((s,e)=>s+e.r,0).toFixed(6),avgR:+(es.reduce((s,e)=>s+e.r,0)/es.length).toFixed(6),medianR:(()=>{const v=es.map(e=>e.r).sort((a,b)=>a-b);return v.length?v[Math.floor((v.length-1)/2)]:null})()}));
