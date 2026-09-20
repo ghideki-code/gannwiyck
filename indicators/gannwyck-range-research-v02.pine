@@ -11,7 +11,7 @@ minMidTouches = input.int(1, "Mínimo de retornos ao 50%", minval=0, maxval=50, 
 maxHistoricalRanges = input.int(10, "Ranges históricos", minval=1, maxval=30, group=groupStructure)
 
 groupRange = "RANGE"
-invalidationMode = input.string("Fechamento", "Invalidação", options=["Fechamento", "Máxima/Mínima"], group=groupRange)
+invalidationMode = input.string("Fechamento", "Invalidação", options=["Fechamento","Máxima/Mínima"], group=groupRange)
 
 groupDisplay = "VISUAL"
 showPivots = input.bool(true, "Mostrar pivôs", group=groupDisplay)
@@ -78,7 +78,13 @@ candidateUp = havePivots and candidateLowBar < candidateHighBar
 candidateDown = havePivots and candidateHighBar < candidateLowBar
 candidateStructural = havePivots and candidateSize > syminfo.mintick and candidateBars >= minRangeBars and candidateBars <= maxRangeBars
 
-pairChanged = candidateStructural and (na(activeHigh) or candidateHigh != activeHigh or candidateLow != activeLow or candidateHighBar != activeHighBar or candidateLowBar != activeLowBar)
+// Research hypothesis:
+// a new pivot does NOT automatically replace the active Range.
+// A new Range can replace the previous one only when there is no active
+// Range yet, or the current Range has already been structurally invalidated.
+pairChanged = candidateStructural and (na(activeHigh) or activeState == "INVALIDADO") and
+     (na(activeHigh) or candidateHigh != activeHigh or candidateLow != activeLow or
+     candidateHighBar != activeHighBar or candidateLowBar != activeLowBar)
 
 if pairChanged
     if not na(activeHigh)
@@ -121,8 +127,11 @@ structureOK = not na(activeSize) and activeSize > syminfo.mintick
 if activeState != "INVALIDADO" and structureOK
     activeState := durationOK and midOK ? "ATIVO" : "EM FORMAÇÃO"
 
-breakUp = activeState != "INVALIDADO" and not na(activeHigh) and (invalidationMode == "Fechamento" ? close > activeHigh : high > activeHigh)
-breakDown = activeState != "INVALIDADO" and not na(activeLow) and (invalidationMode == "Fechamento" ? close < activeLow : low < activeLow)
+breakUp = activeState != "INVALIDADO" and not na(activeHigh) and
+     (invalidationMode == "Fechamento" ? close > activeHigh : high > activeHigh)
+
+breakDown = activeState != "INVALIDADO" and not na(activeLow) and
+     (invalidationMode == "Fechamento" ? close < activeLow : low < activeLow)
 
 if breakUp
     activeState := "INVALIDADO"
@@ -170,7 +179,7 @@ if barstate.islast
         dlD := line.new(activeStart, dlHigh035, bar_index, dlHigh035, extend=extend.right, color=color.orange)
 
 // Historical ranges are retained in arrays for diagnostics.
-// Their full visual rendering will be added after the state logic is validated.
+// Full historical rendering stays disabled until the state machine is validated.
 
 var table t = table.new(tablePosition, 2, 15, frame_color=color.gray, frame_width=1, border_color=color.new(color.gray, 60), border_width=1)
 
