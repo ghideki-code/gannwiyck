@@ -213,6 +213,12 @@ function eventForRanges(cs,ranges,tf) {
      const avg=(a,k)=>a.length?a.reduce((s,x)=>s+(Number(x[k])||0),0)/a.length:null;
      return {windowBars:120,n:closed.length,avgMFE:avg(closed,"mfe"),medianMFE:median(closed.map(x=>x.mfe)),avgMAE:avg(closed,"mae"),medianMAE:median(closed.map(x=>x.mae)),avgMFEBar:avg(closed,"mfeBar"),avgMAEBar:avg(closed,"maeBar"),avgOutcomeBar:avg(closed,"outcomeBar"),events:rows};
    })();
+   audit.mfeMaeGroups = (function(){
+     const ev=audit.mfeMaeAudit.events.filter(e=>e.outcome==="target"||e.outcome==="stop");
+     const mk=(key,labels,ranges)=>ranges.map((b,i)=>{const rows=ev.filter(e=>e[key]>=b[0]&&(b[1]==null||e[key]<b[1]));const r=rows.reduce((s,e)=>s+(Number(e.r)||0),0);const sv=rows.map(e=>e.r).sort((a,b)=>a-b);return {bin:labels[i],n:rows.length,wins:rows.filter(e=>e.outcome==="target").length,losses:rows.filter(e=>e.outcome==="stop").length,totalR:+r.toFixed(6),avgR:rows.length?+(r/rows.length).toFixed(6):null,medianR:rows.length?+sv[Math.floor((sv.length-1)/2)].toFixed(6):null};});
+     const labels=["<=0","0-0.5R","0.5-1R","1-2R",">2R"],ranges=[[0,0.000001],[0.000001,0.5],[0.5,1],[1,2],[2,null]];
+     return {mfe:mk("mfe",labels,ranges),mae:mk("mae",labels,ranges),timeToMFE:mk("mfeBar",["0-2","3-10","11-30",">30"],[[0,3],[3,11],[11,31],[31,null]]),timeToMAE:mk("maeBar",["0-2","3-10","11-30",">30"],[[0,3],[3,11],[11,31],[31,null]])};
+   })();
    audit.rrAudit={
      closed:closed.length,
      rrDistribution:{n:rrValues.length,median:quantile(rrValues,.5),p75:quantile(rrValues,.75),p90:quantile(rrValues,.9),p95:quantile(rrValues,.95),max:quantile(rrValues,1)},
