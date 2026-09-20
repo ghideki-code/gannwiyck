@@ -1,4 +1,4 @@
-// GannWyck Range -> Model 1 Cross Analysis V0.3
+// GannWyck Range -> Model 1 Cross Analysis V0.6
 // RESEARCH ONLY. Real Binance Spot data. No synthetic data. Does not modify frozen V5.6 model/protocol.
 import fs from "node:fs";
 import vm from "node:vm";
@@ -144,6 +144,7 @@ function eventForRanges(cs,ranges,tf) {
      if(!seenRanges.has(k)){seenRanges.add(k);onePerRange.push(e);}
    }
    const eventMechanics=closed.map(e=>({
+     t3Price:cs[e.t3]?.close??null,
      id:e.id,side:e.side,t2:e.t2,t3:e.t3,bos:e.bos,
      t2ToBos:e.bos!=null?e.bos-e.t2:null,
      bosToT3:e.bos!=null?e.t3-e.bos:null,
@@ -152,8 +153,17 @@ function eventForRanges(cs,ranges,tf) {
      risk:e.risk,reward:e.reward,rr:e.rr,r:e.r,
      stopToRange:e.rangeSize?+(e.risk/e.rangeSize).toFixed(6):null,
      targetToRange:e.rangeSize?+(e.reward/e.rangeSize).toFixed(6):null,
-     t3DistanceToRange:e.rangeSize?+(Math.abs(e.t3Price-(e.side==="LONG"?e.rangeLow:e.rangeHigh))/e.rangeSize).toFixed(6):null
+     t3DistanceToRange:(e.rangeSize&&Number.isFinite(cs[e.t3]?.close))?+(Math.abs(cs[e.t3].close-(e.side==="LONG"?e.rangeLow:e.rangeHigh))/e.rangeSize).toFixed(6):null
    }));
+   function groupStats(rows,keyFn){const groups=new Map();for(const e of rows){const k=keyFn(e);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(e);}return [...groups.entries()].map(([group,es])=>({group,n:es.length,wins:es.filter(e=>e.outcome==="target").length,losses:es.filter(e=>e.outcome==="stop").length,totalR:+es.reduce((s,e)=>s+e.r,0).toFixed(6),avgR:+(es.reduce((s,e)=>s+e.r,0)/es.length).toFixed(6),medianR:(()=>{const v=es.map(e=>e.r).sort((a,b)=>a-b);return v.length?v[Math.floor((v.length-1)/2)]:null})()}));
+}
+   const v=(x)=>Number.isFinite(x)?x:null;
+   const tap3Quality={
+     t2ToBOS:groupStats(closed,e=>e.bos-e.t2<=5?"0-5":e.bos-e.t2<=10?"6-10":e.bos-e.t2<=20?"11-20":">20"),
+     bosToT3:groupStats(closed,e=>e.t3-e.bos<=5?"2-5":e.t3-e.bos<=10?"6-10":e.t3-e.bos<=20?"11-20":">20"),
+     stopToRange:groupStats(eventMechanics.filter(e=>v(e.stopToRange)!=null),e=>e.stopToRange<=0.02?"<=2%":e.stopToRange<=0.05?"2-5%":e.stopToRange<=0.10?"5-10%":">10%"),
+     t3DistanceToRange:groupStats(eventMechanics.filter(e=>v(e.t3DistanceToRange)!=null),e=>e.t3DistanceToRange<=0.10?"<=10%":e.t3DistanceToRange<=0.25?"10-25%":e.t3DistanceToRange<=0.50?"25-50%":">50%")
+   };
    const byCycle=new Map();
    for(const e of closed){
      const k=e.rangeLink?[e.rangeLink.start,e.rangeLink.end,e.rangeLink.high,e.rangeLink.low].join("|"):"NO_RANGE";
@@ -199,15 +209,15 @@ function eventForRanges(cs,ranges,tf) {
      mechanics:{
        avgRiskToRange:closed.length?+(closed.reduce((s,e)=>s+(e.risk/e.rangeSize),0)/closed.length).toFixed(6):null,
        avgRewardToRange:closed.length?+(closed.reduce((s,e)=>s+(e.reward/e.rangeSize),0)/closed.length).toFixed(6):null,
-       maxRRTrade:sorted[0]?{id:sorted[0].id,rr:sorted[0].rr,r:sorted[0].r,side:sorted[0].side,t2:sorted[0].t2,t3:sorted[0].t3}:null
+       maxRRTrade:(closed.length?[...closed].sort((a,b)=>b.rr-a.rr)[0]:null)?(()=>{const e=[...closed].sort((a,b)=>b.rr-a.rr)[0];return {id:e.id,rr:e.rr,r:e.r,side:e.side,t2:e.t2,t3:e.t3};})():null
      }
    };
    result.push(audit);
  }
- console.log(JSON.stringify({version:"V0.5",symbol:SYMBOL,source:"Binance Spot REST",maxCandles:MAX_CANDLES,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
+ console.log(JSON.stringify({version:"V0.6",symbol:SYMBOL,source:"Binance Spot REST",maxCandles:MAX_CANDLES,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
 })().catch(e=>{console.error(e);process.exit(1);});
 
-// V0.3 cycle audit helper: groups Model 1 events by the same linked research Range.
+// V0.6 cycle audit helper: groups Model 1 events by the same linked research Range.
 // A cycle is Range -> candidate T2 -> BOS -> T3 -> entry/outcome. Research only.
 function cycleAudit(events){const groups=new Map();for(const e of events){if(!e.rangeLink)continue;const key=[e.rangeLink.start,e.rangeLink.end,e.rangeLink.high,e.rangeLink.low].join('|');if(!groups.has(key))groups.set(key,[]);groups.get(key).push(e);}return [...groups.values()].map((es,i)=>({cycle:i+1,range:es[0].rangeLink,events:es.map(e=>({id:e.id,t2:e.t2,bos:e.bos,t3:e.t3,entryIndex:e.entryIndex,side:e.side,outcome:e.outcome,r:e.r})),eventCount:es.length,closed:es.filter(e=>e.outcome==='target'||e.outcome==='stop').length,totalR:es.filter(e=>Number.isFinite(e.r)).reduce((s,e)=>s+e.r,0)}));}
 function cycleSummary(events){const cycles=cycleAudit(events);const multi=cycles.filter(c=>c.eventCount>1);return{cycles:cycles.length,multiEventCycles:multi.length,events:events.length,closed:events.filter(e=>e.outcome==='target'||e.outcome==='stop').length,totalR:events.filter(e=>Number.isFinite(e.r)).reduce((s,e)=>s+e.r,0),multiEventR:multi.reduce((s,c)=>s+c.totalR,0),maxEventsPerRange:cycles.length?Math.max(...cycles.map(c=>c.eventCount)):0,cycles};}
