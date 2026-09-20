@@ -35,12 +35,12 @@ jobs:
           name: gannwyck-range-cycle-${{ github.run_number }}
           path: range-cycle-research.json
           retention-days: 30
-      - name: Publish V0.4 robustness summary
+      - name: Publish V0.7 MFE MAE diagnostics
         if: always()
         run: |
           node - <<'NODE' | tee -a "$GITHUB_STEP_SUMMARY"
           const d=require('./range-cycle-research.json');
-          console.log('# V0.4 RR robustness diagnostics');
+          console.log('# V0.7 MFE MAE diagnostics');
           for(const x of d.results){
             const a=x.rrAudit||{};
             console.log('\n## '+x.tf);
@@ -54,7 +54,8 @@ jobs:
               capSensitivity:a.capSensitivity,
               oneEventPerResearchRange:a.oneEventPerResearchRange,
               mechanics:a.mechanics,
-              tap3Audit:a.tap3Audit
+              tap3Audit:a.tap3Audit,
+              mfeMaeAudit:a.mfeMaeAudit
             },null,2));
           }
           NODE
