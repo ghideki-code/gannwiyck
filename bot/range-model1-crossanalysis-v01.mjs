@@ -180,6 +180,7 @@ function eventForRanges(cs,ranges,tf) {
      losses:es.filter(e=>e.outcome==="stop").length,
      t3ToEntry:es.map(e=>e.entryIndex!=null?e.entryIndex-e.t3:null).filter(x=>x!=null)
    }));
+   audit.tap3Quality=tap3Quality;
    audit.tap3Audit={
      events:eventMechanics,
      summary:{
