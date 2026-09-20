@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import vm from 'node:vm';
+import {execFileSync} from 'node:child_process';
 
 const ROOT=process.cwd(), OUT=path.join(ROOT,'bot-results-v56');
 const SYMBOL='BTCUSDT';
@@ -11,6 +12,8 @@ const BOOT=+(process.env.BOOTSTRAPS||5000);
 // It MUST NOT be used as prospective OOS evidence.
 const FREEZE_ISO=process.env.FREEZE_ISO||'2026-09-20T00:15:00Z';
 const FREEZE=Date.parse(FREEZE_ISO);
+const FROZEN_MODEL_BLOB_SHA='9ef385bbc7e86db24fe1c9bca87c3e6b536df714';
+const FROZEN_STATS_BLOB_SHA='16721ac77d21af9a6f19ec8003a707b6f2cd3d92';
 const BASE='https://data-api.binance.vision/api/v3/klines';
 const sleep=m=>new Promise(r=>setTimeout(r,m));
 const finite=x=>Number.isFinite(Number(x));
@@ -62,6 +65,12 @@ async function data(tf){
   const m=new Map();for(const k of all)m.set(Number(k[0]),{time:Number(k[0]),open:+k[1],high:+k[2],low:+k[3],close:+k[4],volume:+k[5]});
   return {tf,cs:[...m.values()].sort((a,b)=>a.time-b.time).slice(-MAX)};
 }
+function verifyFrozenSources(){
+  const sha=p=>execFileSync('git',['hash-object',p],{encoding:'utf8'}).trim();
+  const model=sha('src/gannwyck-model1.js'),stats=sha('src/research-stats.js');
+  if(model!==FROZEN_MODEL_BLOB_SHA||stats!==FROZEN_STATS_BLOB_SHA){throw Error('FROZEN_SOURCE_INTEGRITY_FAILED model='+model+' stats='+stats)}
+  return {modelBlobSha:model,statsBlobSha:stats};
+}
 async function engine(){
   const s={console,globalThis:{}};vm.createContext(s);
   vm.runInContext(await fs.readFile(path.join(ROOT,'src/gannwyck-model1.js'),'utf8'),s);
@@ -90,7 +99,7 @@ function run(d,E){
   };
   const allPass=Object.values(checks).every(Boolean);
   return {version:'V5.6-PROSPECTIVE-HOLDOUT',source:{exchange:'Binance Spot public market data',symbol:SYMBOL,timeframe:d.tf,candles:d.cs.length},
-    freeze:{iso:FREEZE_ISO,timestamp:FREEZE,rule:'Only events with entry time strictly after freeze are prospective evidence.'},
+    freeze:{iso:FREEZE_ISO,timestamp:FREEZE,sourceIntegrity:integrity,rule:'Only events with entry time strictly after freeze are prospective evidence.'},
     rules:{realDataOnly:true,noSyntheticData:true,causal:true,parametersFrozen:true,noOosSelection:true,prospectiveOnly:true},
     historicalContext:{events:rows.length,closed:agg(rows).closed,totalR:agg(rows).totalR,audit:{ok:audit.ok,events:audit.eventsChecked,violations:audit.violations}},
     holdout:{samples:prospective.length,summary:agg(prospective),removeTop3:agg(rem),blockBootstrap:block,secondHalf:agg(second),folds:fs.map((x,i)=>({fold:i+1,...agg(x)})),maxLossStreak:maxLossStreak(closed),drawdown:drawdown(closed),checks,allPass},
@@ -98,7 +107,7 @@ function run(d,E){
 }
 function fnv1(s){let h=2166136261;for(const ch of s){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
 (async()=>{
-  await fs.mkdir(OUT,{recursive:true});const E=await engine(),all=[];
+  await fs.mkdir(OUT,{recursive:true});const integrity=verifyFrozenSources(),E=await engine(),all=[];
   for(const raw of TFS){const tf=raw.trim(),d=await data(tf),r=run(d,E);all.push(r);await fs.writeFile(path.join(OUT,SYMBOL+'_'+tf+'_V5.6.json'),JSON.stringify(r,null,2));
     console.log(tf,{holdoutClosed:r.holdout.summary.closed,totalR:r.holdout.summary.totalR,top3:r.holdout.removeTop3.totalR,blockP05:r.holdout.blockBootstrap?.p05??null,allPass:r.holdout.allPass})}
   const summary={version:'V5.6-PROSPECTIVE-HOLDOUT',generatedAt:new Date().toISOString(),freeze:FREEZE_ISO,timeframes:all.map(r=>({timeframe:r.source.timeframe,candles:r.source.candles,historicalContext:r.historicalContext,holdout:r.holdout}))};
