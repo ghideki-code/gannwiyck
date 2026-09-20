@@ -75,7 +75,7 @@ function eventForRanges(cs,ranges,tf) {
     return {...e,rangeLink:{start:r.start,end:r.end,duration:r.duration,high:r.high,low:r.low,direction:r.direction,
       midTouches:r.midTouches,boundaryTouches:r.boundaryTouches,internalShare:+r.internalShare.toFixed(3),diagnostics:diag}};
   });
-  const linked=events.filter(e=>e.rangeLink);
+  const linked=events.filter(e=>e.rangeLink); const cycles=cycleSummary(linked);
   const closed=linked.filter(e=>e.outcome==="target"||e.outcome==="stop");
   const avg=(a,k)=>a.length?a.reduce((s,x)=>s+(Number(x[k])||0),0)/a.length:null;
   const byDiag={};
@@ -83,7 +83,7 @@ function eventForRanges(cs,ranges,tf) {
     const yes=closed.filter(e=>e.rangeLink.diagnostics[key]), no=closed.filter(e=>!e.rangeLink.diagnostics[key]);
     byDiag[key]={yes:{n:yes.length,totalR:yes.reduce((s,e)=>s+e.r,0),avgR:avg(yes,"r")},no:{n:no.length,totalR:no.reduce((s,e)=>s+e.r,0),avgR:avg(no,"r")}};
   }
-  return {tf,candles:cs.length,modelSignals:bt.summary.signals,modelClosed:bt.summary.closed,modelTotalR:bt.summary.totalR,linked:linked.length,linkedClosed:closed.length,linkedClosedR:closed.reduce((s,e)=>s+e.r,0),byDiagnostic:byDiag,events:linked};
+  return {tf,candles:cs.length,modelSignals:bt.summary.signals,modelClosed:bt.summary.closed,modelTotalR:bt.summary.totalR,linked:linked.length,linkedClosed:closed.length,linkedClosedR:closed.reduce((s,e)=>s+e.r,0),byDiagnostic:byDiag,cycleSummary:cycles,events:linked};
 }
 (async()=>{
  const result=[];
