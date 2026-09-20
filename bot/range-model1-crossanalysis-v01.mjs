@@ -1,4 +1,4 @@
-// GannWyck Range -> Model 1 Cross Analysis V0.6
+// GannWyck Range -> Model 1 Cross Analysis V0.7
 // RESEARCH ONLY. Real Binance Spot data. No synthetic data. Does not modify frozen V5.6 model/protocol.
 import fs from "node:fs";
 import vm from "node:vm";
