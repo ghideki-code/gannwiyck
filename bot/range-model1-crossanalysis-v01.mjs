@@ -1,4 +1,4 @@
-// GannWyck Range -> Model 1 Cross Analysis V0.2
+// GannWyck Range -> Model 1 Cross Analysis V0.3
 // RESEARCH ONLY. Real Binance Spot data. No synthetic data. Does not modify frozen V5.6 model/protocol.
 const fs = require("fs");
 const vm = require("vm");
@@ -9,17 +9,38 @@ vm.runInContext(MODEL_SOURCE, sandbox);
 const M = sandbox.globalThis.GannWyckModel1;
 
 const SYMBOL = process.env.SYMBOL || "BTCUSDT";
-const LIMIT = Math.min(Number(process.env.LIMIT || 500), 1000);
+const MAX_CANDLES = Math.max(200, Number(process.env.MAX_CANDLES || 5000));
 const TIMEFRAMES = (process.env.TIMEFRAMES || "1h,4h,12h,1d").split(",").map(s=>s.trim()).filter(Boolean);
 const PIVOT_LEN = Number(process.env.PIVOT_LEN || 5);
 const MIN_BARS = Number(process.env.MIN_BARS || 12);
 const MAX_BARS = Number(process.env.MAX_BARS || 300);
 
 async function fetchKlines(interval) {
-  const u = new URL("https://api.binance.com/api/v3/klines");
-  u.searchParams.set("symbol", SYMBOL); u.searchParams.set("interval", interval); u.searchParams.set("limit", String(LIMIT));
-  const r = await fetch(u); if (!r.ok) throw new Error("Binance HTTP "+r.status+" "+interval);
-  return r.json();
+  const BASE = "https://data-api.binance.vision/api/v3/klines";
+  const ms = ({"1h":3600000,"4h":14400000,"12h":43200000,"1d":86400000})[interval];
+  let end = Date.now() - (ms || 0), all = [];
+  while (all.length < MAX_CANDLES) {
+    const u = new URL(BASE);
+    u.searchParams.set("symbol", SYMBOL);
+    u.searchParams.set("interval", interval);
+    u.searchParams.set("limit", "1000");
+    u.searchParams.set("endTime", String(end));
+    let rows = null;
+    for (let attempt=1; attempt<=5; attempt++) {
+      const r = await fetch(u);
+      if (r.ok) { rows = await r.json(); break; }
+      if (r.status===429 || r.status>=500) { await new Promise(x=>setTimeout(x, attempt*1000)); continue; }
+      throw new Error("Binance HTTP "+r.status+" "+interval);
+    }
+    if (!rows || !rows.length) break;
+    all.push(...rows);
+    if (rows.length < 1000) break;
+    end = Number(rows[0][0]) - 1;
+    await new Promise(x=>setTimeout(x, 80));
+  }
+  const byOpen = new Map();
+  for (const x of all) byOpen.set(Number(x[0]), x);
+  return [...byOpen.values()].sort((a,b)=>Number(a[0])-Number(b[0])).slice(-MAX_CANDLES);
 }
 function pivots(c,i,type) {
   if(i<PIVOT_LEN || i>=c.length-PIVOT_LEN) return false;
@@ -83,7 +104,26 @@ function eventForRanges(cs,ranges,tf) {
     const yes=closed.filter(e=>e.rangeLink.diagnostics[key]), no=closed.filter(e=>!e.rangeLink.diagnostics[key]);
     byDiag[key]={yes:{n:yes.length,totalR:yes.reduce((s,e)=>s+e.r,0),avgR:avg(yes,"r")},no:{n:no.length,totalR:no.reduce((s,e)=>s+e.r,0),avgR:avg(no,"r")}};
   }
-  return {tf,candles:cs.length,modelSignals:bt.summary.signals,modelClosed:bt.summary.closed,modelTotalR:bt.summary.totalR,linked:linked.length,linkedClosed:closed.length,linkedClosedR:closed.reduce((s,e)=>s+e.r,0),byDiagnostic:byDiag,cycleSummary:cycles,events:linked};
+  const cycleRows = cycles.cycles;
+  const multi = cycleRows.filter(x=>x.eventCount>1);
+  const sameSide = multi.filter(x=>new Set(x.events.map(e=>e.side)).size===1);
+  const mixedSide = multi.filter(x=>new Set(x.events.map(e=>e.side)).size>1);
+  const repeatedT2 = linked.length - new Set(linked.map(e=>e.t2)).size;
+  const cycleDependence = {
+    status:"diagnostic_only",
+    cycles:cycleRows.length,
+    events:linked.length,
+    singleEventCycles:cycleRows.filter(x=>x.eventCount===1).length,
+    multiEventCycles:multi.length,
+    multiEventShare:cycleRows.length ? multi.length/cycleRows.length : null,
+    eventConcentrationInMultiCycles:linked.length ? multi.reduce((s,x)=>s+x.eventCount,0)/linked.length : null,
+    sameSideMultiEventCycles:sameSide.length,
+    mixedSideMultiEventCycles:mixedSide.length,
+    repeatedT2,
+    eventToCycleRatio:cycleRows.length ? linked.length/cycleRows.length : null,
+    note:"Multiple Model 1 events linked to the same research Range are not independent observations. This diagnostic does not decide whether the methodology permits multiple entries within one Range."
+  };
+  return {tf,candles:cs.length,modelSignals:bt.summary.signals,modelClosed:bt.summary.closed,modelTotalR:bt.summary.totalR,linked:linked.length,linkedClosed:closed.length,linkedClosedR:closed.reduce((s,e)=>s+e.r,0),byDiagnostic:byDiag,cycleSummary:cycles,cycleDependence,events:linked};
 }
 (async()=>{
  const result=[];
@@ -93,7 +133,7 @@ function eventForRanges(cs,ranges,tf) {
    const ranges=buildRanges(cs);
    result.push(eventForRanges(cs,ranges,tf));
  }
- console.log(JSON.stringify({version:"V0.2",symbol:SYMBOL,source:"Binance Spot REST",limit:LIMIT,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
+ console.log(JSON.stringify({version:"V0.3",symbol:SYMBOL,source:"Binance Spot REST",maxCandles:MAX_CANDLES,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
 })().catch(e=>{console.error(e);process.exit(1);});
 
 // V0.3 cycle audit helper: groups Model 1 events by the same linked research Range.
