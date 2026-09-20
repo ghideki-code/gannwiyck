@@ -1,6 +1,7 @@
 name: GannWyck V5.6 Prospective Holdout
 # Frozen prospective validation, do not alter freeze or model assumptions.
 # Final trigger after V5.6 runtime-scope fix. Protocol unchanged.
+# Automated trigger refresh: execution only, no protocol/model changes.
 on:
   workflow_dispatch:
   push:
