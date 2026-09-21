@@ -1,0 +1,42 @@
+name: GannWyck Gann-Time Isolated Research
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generate real-data research artifact
+        env:
+          SYMBOL: BTCUSDT
+          TIMEFRAMES: 1h,4h,12h,1d,2d,3d,5d,1w,1M
+          MAX_CANDLES: 5000
+          PIVOT_LEN: 5
+          MIN_BARS: 12
+          MAX_BARS: 300
+        run: node bot/range-model1-crossanalysis-v01.mjs > range-level-audit.json
+      - name: Test isolated Gann-time feature
+        env:
+          INPUT_JSON: range-level-audit.json
+        run: node bot/gw-x-gann-time-v01.mjs > gann-time-v01.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gannwyck-gann-time-${{ github.run_number }}
+          path: |
+            range-level-audit.json
+            gann-time-v01.json
+          retention-days: 30
