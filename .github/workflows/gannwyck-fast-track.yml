@@ -1,0 +1,65 @@
+name: GannWyck Fast Track Research
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '37 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  core:
+    name: Core ${{ matrix.tf }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        tf: [1h, 4h, 12h, 1d]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generate real Binance data and causal Model 1 research
+        env:
+          SYMBOL: BTCUSDT
+          TIMEFRAMES: ${{ matrix.tf }}
+          MAX_CANDLES: 5000
+          PIVOT_LEN: 5
+          MIN_BARS: 12
+          MAX_BARS: 300
+        run: node bot/range-model1-crossanalysis-v01.mjs > range-${{ matrix.tf }}.json
+      - name: Publish artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: gannwyck-fast-${{ matrix.tf }}-${{ github.run_number }}
+          path: range-${{ matrix.tf }}.json
+          retention-days: 14
+
+  prospective-integrity:
+    name: V5.6 prospective integrity
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run frozen prospective holdout
+        env:
+          TIMEFRAMES: 1h,4h,12h,1d
+          MAX_CANDLES: 50000
+          MAX_BARS: 120
+          WARMUP: 100
+          BOOTSTRAPS: 5000
+          FREEZE_ISO: '2026-09-20T00:15:00Z'
+        run: node bot/run-v56.mjs
+      - name: Publish holdout artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gannwyck-fast-v56-${{ github.run_number }}
+          path: bot-results-v56/
+          retention-days: 14
