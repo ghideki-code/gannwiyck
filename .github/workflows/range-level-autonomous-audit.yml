@@ -1,0 +1,64 @@
+name: GannWyck Range-Level Autonomous Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '53 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Run real-data range research
+        env:
+          SYMBOL: BTCUSDT
+          TIMEFRAMES: 1h,4h,12h,1d,2d,3d,5d,1w,1M
+          MAX_CANDLES: 5000
+          PIVOT_LEN: 5
+          MIN_BARS: 12
+          MAX_BARS: 300
+        run: node bot/range-model1-crossanalysis-v01.mjs > range-level-audit.json
+      - name: Run continuous conditional analysis
+        env:
+          INPUT_JSON: range-level-audit.json
+        run: node bot/gannwyck-conditional-crossanalysis-v02.mjs > conditional-v02.json
+      - name: Build autonomous report
+        run: |
+          node - <<'NODE' > RANGE_LEVEL_REPORT.md
+          const d=require('./range-level-audit.json');
+          console.log('# GannWyck Range-Level Autonomous Audit');
+          console.log('');
+          console.log('Source: real Binance Spot BTCUSDT. Research only. V5.6 frozen source is not modified.');
+          for(const x of d.results||[]){
+            const c=x.cycleDependence||{};
+            console.log('\n## '+x.tf);
+            console.log('- Closed events: '+x.linkedClosed);
+            console.log('- Closed R: '+x.linkedClosedR);
+            console.log('- Research cycles: '+(c.cycles??'n/a'));
+            console.log('- Multi-event cycles: '+(c.multiEventCycles??'n/a'));
+            console.log('- Repeated T2: '+(c.repeatedT2??'n/a'));
+            if(x.rrAudit?.oneEventPerResearchRange) console.log('- One-event-per-range: '+JSON.stringify(x.rrAudit.oneEventPerResearchRange));
+          }
+          NODE
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gannwyck-range-level-${{ github.run_number }}
+          path: |
+            range-level-audit.json
+            conditional-v02.json
+            RANGE_LEVEL_REPORT.md
+          retention-days: 30
+      - name: Publish report
+        if: always()
+        run: cat RANGE_LEVEL_REPORT.md >> "$GITHUB_STEP_SUMMARY"
