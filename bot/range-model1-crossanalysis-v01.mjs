@@ -149,18 +149,47 @@ function eventForRanges(cs,ranges,tf) {
      const k=e.rangeLink?[e.rangeLink.start,e.rangeLink.end,e.rangeLink.high,e.rangeLink.low].join("|"):"NO_RANGE";
      if(!seenRanges.has(k)){seenRanges.add(k);onePerRange.push(e);}
    }
-   const eventMechanics=closed.map(e=>({
-     t3Price:cs[e.t3]?.close??null,
-     id:e.id,side:e.side,t2:e.t2,t3:e.t3,bos:e.bos,entryIndex:e.entryIndex,outcomeIndex:e.outcomeIndex,
-     t2ToBos:e.bos!=null?e.bos-e.t2:null,
-     bosToT3:e.bos!=null?e.t3-e.bos:null,
-     t3ToEntry:e.entryIndex!=null?e.entryIndex-e.t3:null,
-     rangeSize:e.rangeSize,
-     risk:e.risk,reward:e.reward,rr:e.rr,r:e.r,
-     stopToRange:e.rangeSize?+(e.risk/e.rangeSize).toFixed(6):null,
-     targetToRange:e.rangeSize?+(e.reward/e.rangeSize).toFixed(6):null,outcome:e.outcome,r:e.r,
-     t3DistanceToRange:(e.rangeSize&&Number.isFinite(cs[e.t3]?.close))?+(Math.abs(cs[e.t3].close-(e.side==="LONG"?e.rangeLow:e.rangeHigh))/e.rangeSize).toFixed(6):null
-   }));
+   const eventMechanics=closed.map(e=>{
+     const t2c=cs[e.t2], bosc=cs[e.bos], t3c=cs[e.t3];
+     const side=e.side, R=e.rangeSize;
+     const orient=(longValue,shortValue)=>side==="LONG"?longValue:shortValue;
+     const signedT2ToBOS=(t2c&&bosc&&R>0)?orient((bosc.close-t2c.close)/R,(t2c.close-bosc.close)/R):null;
+     let maxImpulse=null;
+     if(t2c&&bosc&&R>0){
+       for(let i=e.t2;i<=e.bos;i++){
+         const c=cs[i];
+         const x=side==="LONG"?(c.high-t2c.close)/R:(t2c.close-c.low)/R;
+         if(maxImpulse===null||x>maxImpulse)maxImpulse=x;
+       }
+     }
+     const retracement=(bosc&&t3c&&R>0)?orient((bosc.close-t3c.close)/R,(t3c.close-bosc.close)/R):null;
+     const t3Penetration=(t2c&&t3c&&R>0)?orient((t3c.low-t2c.low)/R,(t2c.high-t3c.high)/R):null;
+     const retention=(maxImpulse!=null&&maxImpulse>0&&retracement!=null)?1-Math.abs(retracement)/maxImpulse:null;
+     const atrAtBos=(()=>{const end=e.bos;if(!Number.isInteger(end)||end<15)return null;let tr=[];for(let i=end-13;i<=end;i++){const c=cs[i],p=cs[i-1];tr.push(Math.max(c.high-c.low,Math.abs(c.high-p.close),Math.abs(c.low-p.close)));}return tr.reduce((a,x)=>a+x,0)/tr.length;})();
+     const atrNorm=(x)=>x!=null&&atrAtBos>0?x*R/atrAtBos:null;
+     return {
+       id:e.id,side,t2:e.t2,bos:e.bos,t3:e.t3,entryIndex:e.entryIndex,outcomeIndex:e.outcomeIndex,
+       t2OHLC:t2c?{time:t2c.time,open:t2c.open,high:t2c.high,low:t2c.low,close:t2c.close}:null,
+       bosOHLC:bosc?{time:bosc.time,open:bosc.open,high:bosc.high,low:bosc.low,close:bosc.close,brokenLevel:e.bosLevel}:null,
+       t3OHLC:t3c?{time:t3c.time,open:t3c.open,high:t3c.high,low:t3c.low,close:t3c.close}:null,
+       entry:e.entry,stop:e.stop,target:e.target,rangeSize:R,risk:e.risk,reward:e.reward,rr:e.rr,r:e.r,
+       t2ToBos:e.bos!=null?e.bos-e.t2:null,bosToT3:e.bos!=null?e.t3-e.bos:null,
+       t3ToEntry:e.entryIndex!=null?e.entryIndex-e.t3:null,
+       stopToRange:R?+(e.risk/R).toFixed(6):null,targetToRange:R?+(e.reward/R).toFixed(6):null,outcome:e.outcome,
+       t3DistanceToRange:(R&&Number.isFinite(t3c?.close))?+(Math.abs(t3c.close-(side==="LONG"?e.rangeLow:e.rangeHigh))/R).toFixed(6):null,
+       signedT2ToBOS:signedT2ToBOS!=null?+signedT2ToBOS.toFixed(6):null,
+       maxDirectionalImpulse:maxImpulse!=null?+maxImpulse.toFixed(6):null,
+       bosToT3Retracement:retracement!=null?+retracement.toFixed(6):null,
+       t3PenetrationTowardT2:t3Penetration!=null?+t3Penetration.toFixed(6):null,
+       impulseRetention:retention!=null?+retention.toFixed(6):null,
+       atrAtBOS:atrAtBos!=null?+atrAtBos.toFixed(8):null,
+       t2ToBOS_ATR:atrNorm(signedT2ToBOS)!=null?+atrNorm(signedT2ToBOS).toFixed(6):null,
+       maxImpulse_ATR:atrNorm(maxImpulse)!=null?+atrNorm(maxImpulse).toFixed(6):null,
+       bosToT3Retracement_ATR:atrNorm(retracement)!=null?+atrNorm(retracement).toFixed(6):null,
+       rangeDurationAtT2:e.rangeLink?e.rangeLink.duration:null,
+       bosToT3RangeDuration:e.rangeLink&&e.rangeLink.duration>0?+( (e.t3-e.bos)/e.rangeLink.duration ).toFixed(6):null
+     };
+   });
    function groupStats(rows,keyFn){const groups=new Map();for(const e of rows){const k=keyFn(e);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(e);}return [...groups.entries()].map(([group,es])=>({group,n:es.length,wins:es.filter(e=>e.outcome==="target").length,losses:es.filter(e=>e.outcome==="stop").length,totalR:+es.reduce((s,e)=>s+e.r,0).toFixed(6),avgR:+(es.reduce((s,e)=>s+e.r,0)/es.length).toFixed(6),medianR:(()=>{const v=es.map(e=>e.r).sort((a,b)=>a-b);return v.length?v[Math.floor((v.length-1)/2)]:null})()}));
 }
    const v=(x)=>Number.isFinite(x)?x:null;
