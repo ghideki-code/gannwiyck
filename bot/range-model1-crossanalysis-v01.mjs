@@ -168,7 +168,7 @@ function eventForRanges(cs,ranges,tf) {
      const atrAtBos=(()=>{const end=e.bos;if(!Number.isInteger(end)||end<15)return null;let tr=[];for(let i=end-13;i<=end;i++){const c=cs[i],p=cs[i-1];tr.push(Math.max(c.high-c.low,Math.abs(c.high-p.close),Math.abs(c.low-p.close)));}return tr.reduce((a,x)=>a+x,0)/tr.length;})();
      const atrNorm=(x)=>x!=null&&atrAtBos>0?x*R/atrAtBos:null;
      return {
-       id:e.id,side,t2:e.t2,bos:e.bos,t3:e.t3,entryIndex:e.entryIndex,outcomeIndex:e.outcomeIndex,
+       id:e.id,side,t2:e.t2,bos:e.bos,t3:e.t3,entryIndex:e.entryIndex,outcomeIndex:e.outcomeIndex,rangeLink:e.rangeLink||null,
        t2OHLC:t2c?{time:t2c.time,open:t2c.open,high:t2c.high,low:t2c.low,close:t2c.close}:null,
        bosOHLC:bosc?{time:bosc.time,open:bosc.open,high:bosc.high,low:bosc.low,close:bosc.close,brokenLevel:e.bosLevel}:null,
        t3OHLC:t3c?{time:t3c.time,open:t3c.open,high:t3c.high,low:t3c.low,close:t3c.close}:null,
