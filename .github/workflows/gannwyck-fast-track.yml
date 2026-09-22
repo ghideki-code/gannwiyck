@@ -102,3 +102,35 @@ jobs:
             chronological-\${{ matrix.tf }}.json
             gann-time-\${{ matrix.tf }}.json
           retention-days: 14
+
+  triage-fast:
+    name: Triage ${{ matrix.tf }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        tf: [1h, 4h, 12h, 1d]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generate focused artifact
+        env:
+          SYMBOL: BTCUSDT
+          TIMEFRAMES: ${{ matrix.tf }}
+          MAX_CANDLES: 5000
+          PIVOT_LEN: 5
+          MIN_BARS: 12
+          MAX_BARS: 300
+        run: node bot/range-model1-crossanalysis-v01.mjs > range-${{ matrix.tf }}.json
+      - name: Fast chronological triage
+        env:
+          INPUT_JSON: range-${{ matrix.tf }}.json
+        run: node bot/gannwyck-fast-triage-v01.mjs > triage-${{ matrix.tf }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gannwyck-fast-triage-${{ matrix.tf }}-${{ github.run_number }}
+          path: triage-${{ matrix.tf }}.json
+          retention-days: 14
