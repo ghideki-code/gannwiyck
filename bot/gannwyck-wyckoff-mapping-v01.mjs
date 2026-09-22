@@ -39,7 +39,7 @@ function summarize(events){
 }
 function getEvents(tf){
   const block = (data.results || []).find(x=>x.tf===tf) || {};
-  const raw = block.events || block.closedEvents || [];
+  const raw = block.tap3Audit?.events || block.events || block.closedEvents || [];
   return raw.filter(e=>e.outcome==='target'||e.outcome==='stop').map(e=>{
     const range=num(e.rangeSize);
     const t2bos=num(e.t2ToBOS);
@@ -51,10 +51,12 @@ function getEvents(tf){
     const bosAtr=num(e.maxImpulse_ATR);
     const t2Atr=num(e.t2ToBOS_ATR);
     const signed=num(e.signedT2ToBOS);
-    const t2Rej = Number.isFinite(signed) && Number.isFinite(impulse) ? Math.max(0, impulse-signed) : null;
+    const t2 = e.t2OHLC;
+    const t2Span = t2 ? num(t2.high)-num(t2.low) : null;
+    const t2Reject = t2 && t2Span>0 ? (e.side==='LONG' ? (num(t2.close)-num(t2.low))/t2Span : (num(t2.high)-num(t2.close))/t2Span) : null;
     return {...e,
       _t2bos:t2bos,_bosT3:bosT3,_impulse:impulse,_retr:retr,_pen:pen,_ret:ret,
-      _bosAtr:bosAtr,_t2Atr:t2Atr,_signed:signed,_t2Rej:t2Rej,
+      _bosAtr:bosAtr,_t2Atr:t2Atr,_signed:signed,_t2Rej:t2Reject,
       _impulseRange: range&&impulse!=null ? impulse/range : null
     };
   }).sort((a,b)=>(num(a.entryIndex)??0)-(num(b.entryIndex)??0));
