@@ -38,8 +38,8 @@ function summarize(events){
   };
 }
 function getEvents(tf){
-  const block = data[tf] || {};
-  const raw = block.events || block.closedEvents || block.results || [];
+  const block = (data.results || []).find(x=>x.tf===tf) || {};
+  const raw = block.events || block.closedEvents || [];
   return raw.filter(e=>e.outcome==='target'||e.outcome==='stop').map(e=>{
     const range=num(e.rangeSize);
     const t2bos=num(e.t2ToBOS);
