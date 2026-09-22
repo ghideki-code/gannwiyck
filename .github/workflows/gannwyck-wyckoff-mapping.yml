@@ -1,0 +1,43 @@
+name: GannWyck Wyckoff Mapping Research 01
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '41 */6 * * *'
+
+jobs:
+  research:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch real Binance research data
+        run: |
+          node bot/range-model1-crossanalysis-v01.mjs > range-level-audit.json
+      - name: Run Wyckoff mapping research
+        run: |
+          node bot/gannwyck-wyckoff-mapping-v01.mjs range-level-audit.json > wyckoff-mapping-v01.json
+      - name: Publish summary
+        run: |
+          node -e "
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync('wyckoff-mapping-v01.json','utf8'));
+          for(const [tf,r] of Object.entries(x.timeframes)){
+            if(!r.eligible){ console.log(tf+': '+r.reason); continue; }
+            console.log('\n## '+tf);
+            console.log('ALL OOS',JSON.stringify(r.baseline.oos));
+            for(const [k,v] of Object.entries(r.candidates)){
+              console.log(k,'OOS',JSON.stringify(v.oos),'Val',JSON.stringify(v.validation));
+            }
+          }" >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gannwyck-wyckoff-mapping-v01
+          path: |
+            range-level-audit.json
+            wyckoff-mapping-v01.json
