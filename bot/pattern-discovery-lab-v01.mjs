@@ -4,7 +4,7 @@
 // RESEARCH ONLY. Real-market artifacts only. Never executes real orders.
 // Synthetic fixtures, if any, are unit tests only, never research evidence.
 
-const fs = require('node:fs');
+import fs from 'node:fs';
 const INPUT = process.env.INPUT_JSON || process.argv[2] || 'range-level-audit.json';
 const data = JSON.parse(fs.readFileSync(INPUT, 'utf8'));
 const ALPHA = Number(process.env.ALPHA || 0.05);
