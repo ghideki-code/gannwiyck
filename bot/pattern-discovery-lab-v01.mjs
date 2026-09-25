@@ -156,7 +156,8 @@ function section(events){
   };
 }
 function analyzeTF(block){
-  const events=(block.tap3Audit?.events||block.events||[]).filter(e=>e.outcome==='target'||e.outcome==='stop');
+  const baseById=new Map((block.events||[]).map(e=>[e.id,e]));
+  const events=(block.tap3Audit?.events||block.events||[]).filter(e=>e.outcome==='target'||e.outcome==='stop').map(e=>({...baseById.get(e.id),...e}));
   const full=section(events),split=splitChronological(events),chronological={};
   for(const [k,v] of Object.entries(split))chronological[k]=section(v);
   return {timeframe:block.tf||null,events:events.length,fullSample:full,chronological};
