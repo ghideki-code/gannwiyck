@@ -1,0 +1,76 @@
+name: GannWyck Pattern Discovery Lab
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  discovery:
+    name: Pattern Discovery \${{ matrix.tf }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        tf: [1h, 4h, 12h, 1d]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Static research safety tests
+        run: node tests/pattern-discovery-lab.test.mjs
+
+      - name: Generate real Binance causal Model 1 research
+        env:
+          SYMBOL: BTCUSDT
+          TIMEFRAMES: \${{ matrix.tf }}
+          MAX_CANDLES: 5000
+          PIVOT_LEN: 5
+          MIN_BARS: 12
+          MAX_BARS: 300
+        run: node bot/range-model1-crossanalysis-v01.mjs > range-\${{ matrix.tf }}.json
+
+      - name: Run Pattern Discovery Lab
+        env:
+          INPUT_JSON: range-\${{ matrix.tf }}.json
+        run: node bot/pattern-discovery-lab-v01.mjs > pattern-discovery-\${{ matrix.tf }}.json
+
+      - name: Publish objective summary
+        env:
+          TF: \${{ matrix.tf }}
+        run: |
+          node - <<'NODE' >> "$GITHUB_STEP_SUMMARY"
+          const fs=require('fs');
+          const x=JSON.parse(fs.readFileSync('pattern-discovery-'+process.env.TF+'.json','utf8'));
+          const r=x.results[0];
+          console.log('## '+process.env.TF);
+          console.log('Events: '+r.events);
+          console.log('Baseline: '+JSON.stringify(r.fullSample.baseline));
+          for (const k of ['direction','rr','t2ToBOS','bosToT3','cross3D','climaxProxy']) {
+            console.log('### '+k);
+            console.log(JSON.stringify(r.fullSample[k]));
+          }
+          console.log('### OOS baseline');
+          console.log(JSON.stringify(r.chronological.oos.baseline));
+          console.log('### OOS BOS->T3');
+          console.log(JSON.stringify(r.chronological.oos.bosToT3));
+          console.log('### OOS climax proxy');
+          console.log(JSON.stringify(r.chronological.oos.climaxProxy));
+          NODE
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gannwyck-pattern-discovery-\${{ matrix.tf }}-\${{ github.run_number }}
+          path: |
+            range-\${{ matrix.tf }}.json
+            pattern-discovery-\${{ matrix.tf }}.json
+          retention-days: 30
