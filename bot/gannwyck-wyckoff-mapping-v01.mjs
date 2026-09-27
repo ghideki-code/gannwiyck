@@ -7,7 +7,7 @@
  * Output: JSON to stdout.
  */
 'use strict';
-const fs = require('fs');
+import fs from 'node:fs';
 
 const input = process.argv[2] || 'range-level-audit.json';
 const data = JSON.parse(fs.readFileSync(input, 'utf8'));
