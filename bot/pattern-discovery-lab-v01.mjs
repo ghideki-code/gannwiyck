@@ -99,6 +99,29 @@ function climaxProxy(e){
   const rej=t2Rejection(e),t2b=n(e.t2ToBos ?? e.t2ToBOS),bt3=n(e.bosToT3);
   return rej!=null && rej>=.60 && t2b!=null && t2b<=5 && bt3!=null && bt3<=5;
 }
+function quantileValue(values,p){
+  const a=values.filter(Number.isFinite).slice().sort((x,y)=>x-y);
+  if(!a.length)return null;
+  const pos=(a.length-1)*p,lo=Math.floor(pos),hi=Math.ceil(pos);
+  return lo===hi?a[lo]:a[lo]+(a[hi]-a[lo])*(pos-lo);
+}
+function adaptiveT1T2Rows(events,referenceEvents){
+  const ref=(referenceEvents||events).map(e=>n(e.t1ToT2)).filter(Number.isFinite);
+  const q25=quantileValue(ref,.25),q50=quantileValue(ref,.50),q75=quantileValue(ref,.75);
+  if(ref.length<4||q25==null||q50==null||q75==null)return {rows:[],definition:{method:'empirical_quartiles',referenceN:ref.length,degenerate:true,reason:'fewer_than_4_reference_values'}};
+  const cuts=[q25,q50,q75];
+  const degenerate=!(q25<q50&&q50<q75);
+  const bucket=e=>{
+    const x=n(e.t1ToT2); if(x==null)return null;
+    if(x<=q25)return 'Q1';
+    if(x<=q50)return 'Q2';
+    if(x<=q75)return 'Q3';
+    return 'Q4';
+  };
+  const groups=makeGroups(events,bucket);
+  const rows=fisherRows(groups,events).map(({_ids,...x})=>x);
+  return {rows,definition:{method:'empirical_quartiles',referenceN:ref.length,q25,q50,q75,degenerate,thresholdsFrozenFromReference:true}};
+}
 function makeGroups(events,keyFn){
   const m=new Map();
   for(const e of events){
@@ -129,7 +152,7 @@ function cross3D(events){
   const q=bh(rows);
   return rows.map((r,i)=>({...r,q:q[i],significant:r.n>=5&&q[i]!=null&&q[i]<ALPHA}));
 }
-function section(events){
+function section(events,adaptiveReference=events){
   const closed=events.filter(e=>e.outcome==='target'||e.outcome==='stop');
   const dir=makeGroups(closed,e=>e.side);
   const rr=makeGroups(closed,rrBucket);
@@ -142,6 +165,7 @@ function section(events){
     direction:fisherRows(dir,closed).map(({_ids,...x})=>x),
     rr:fisherRows(rr,closed).map(({_ids,...x})=>x),
     t1ToT2:fisherRows(t1t2,closed).map(({_ids,...x})=>x),
+    t1ToT2Adaptive:adaptiveT1T2Rows(closed,adaptiveReference),
     t2ToBOS:fisherRows(t2bos,closed).map(({_ids,...x})=>x),
     bosToT3:fisherRows(bt3,closed).map(({_ids,...x})=>x),
     cross3D:cross3D(closed),
@@ -157,10 +181,11 @@ function section(events){
   return applyGlobalBH(out);
 }
 function applyGlobalBH(sectionResult){
-  const families=['direction','rr','t1ToT2','t2ToBOS','bosToT3','cross3D','climaxProxy'];
+  const families=['direction','rr','t1ToT2','t1ToT2Adaptive','t2ToBOS','bosToT3','cross3D','climaxProxy'];
   const rows=[];
   for(const family of families){
-    for(const row of (sectionResult[family]||[])){
+    const familyRows=family==='t1ToT2Adaptive' ? (sectionResult[family].rows||[]) : (sectionResult[family]||[]);
+    for(const row of familyRows){
       if(Number.isFinite(row.p)) rows.push({family,row});
     }
   }
@@ -182,8 +207,10 @@ function applyGlobalBH(sectionResult){
 function analyzeTF(block){
   const baseById=new Map((block.events||[]).map(e=>[e.id,e]));
   const events=(block.tap3Audit?.events||block.events||[]).filter(e=>e.outcome==='target'||e.outcome==='stop').map(e=>({...baseById.get(e.id),...e}));
-  const full=section(events),split=splitChronological(events),chronological={};
-  for(const [k,v] of Object.entries(split))chronological[k]=section(v);
+  const full=section(events,events),split=splitChronological(events),chronological={};
+  chronological.train=section(split.train,split.train);
+  chronological.validation=section(split.validation,split.train);
+  chronological.oos=section(split.oos,split.train);
   return {timeframe:block.tf||null,events:events.length,fullSample:full,chronological};
 }
 const report={
