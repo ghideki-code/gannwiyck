@@ -8,6 +8,8 @@ assert.match(src,/function bh\(/);
 assert.match(src,/function applyGlobalBH\(/);
 assert.match(src,/globalSignificant/);
 assert.match(src,/globalHypothesisCount/);
+assert.match(src,/adaptiveT1T2Rows/);
+assert.match(src,/thresholdsFrozenFromReference/);
 assert.match(src,/climaxProxy/);
 assert.doesNotMatch(src,/newOrder|placeOrder|createOrder|\/order\b/i);
 const rangeSrc=fs.readFileSync('bot/range-model1-crossanalysis-v01.mjs','utf8');
