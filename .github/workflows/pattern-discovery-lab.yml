@@ -69,9 +69,10 @@ jobs:
           for (const r of (x.results || [])) {
             const mt = r.fullSample && r.fullSample.multipleTesting;
             if (!mt || mt.globalBH !== true) throw new Error('Global BH metadata missing for ' + tf);
-            const families = ['direction','rr','t1ToT2','t2ToBOS','bosToT3','cross3D','climaxProxy'];
+            const families = ['direction','rr','t1ToT2','t1ToT2Adaptive','t2ToBOS','bosToT3','cross3D','climaxProxy'];
             for (const family of families) {
-              for (const row of (r.fullSample[family] || [])) {
+              const rows = family === 't1ToT2Adaptive' ? ((r.fullSample[family] || {}).rows || []) : (r.fullSample[family] || []);
+              for (const row of rows) {
                 if (Number.isFinite(row.p) && (!Number.isFinite(row.globalQ) || typeof row.globalSignificant !== 'boolean')) {
                   throw new Error('Incomplete global BH row in ' + tf + '/' + family);
                 }
@@ -97,6 +98,8 @@ jobs:
           }
           console.log('### Multiple-testing metadata');
           console.log(JSON.stringify(r.fullSample.multipleTesting));
+          console.log('### Adaptive Tap1->Tap2');
+          console.log(JSON.stringify(r.fullSample.t1ToT2Adaptive));
           console.log('### OOS baseline');
           console.log(JSON.stringify(r.chronological.oos.baseline));
           console.log('### OOS BOS->T3');
