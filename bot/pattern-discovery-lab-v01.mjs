@@ -137,7 +137,7 @@ function section(events){
   const t2bos=makeGroups(closed,t2bosBucket);
   const bt3=makeGroups(closed,bosT3Bucket);
   const climax=makeGroups(closed,e=>climaxProxy(e)?(e.side==='LONG'?'LONG_SC_PROXY':'SHORT_BC_PROXY'):'OTHER');
-  return {
+  const out={
     baseline:stats(closed),
     direction:fisherRows(dir,closed).map(({_ids,...x})=>x),
     rr:fisherRows(rr,closed).map(({_ids,...x})=>x),
@@ -154,6 +154,30 @@ function section(events){
       note:'Not a Wyckoff Selling Climax confirmation because the causal event artifact does not include volume history.'
     }
   };
+  return applyGlobalBH(out);
+}
+function applyGlobalBH(sectionResult){
+  const families=['direction','rr','t1ToT2','t2ToBOS','bosToT3','cross3D','climaxProxy'];
+  const rows=[];
+  for(const family of families){
+    for(const row of (sectionResult[family]||[])){
+      if(Number.isFinite(row.p)) rows.push({family,row});
+    }
+  }
+  const q=bh(rows.map(x=>({p:x.row.p})));
+  for(let i=0;i<rows.length;i++){
+    rows[i].row.globalQ=q[i];
+    rows[i].row.globalSignificant=rows[i].row.n>=5 && q[i]!=null && q[i]<ALPHA;
+    rows[i].row.globalMultiplicityScope='all_pattern_discovery_hypotheses_in_section';
+  }
+  sectionResult.multipleTesting={
+    familyBH:true,
+    globalBH:true,
+    globalHypothesisCount:rows.length,
+    globalAlpha:ALPHA,
+    promotionRule:'globalSignificant=true; requires n>=5 and globalQ<alpha'
+  };
+  return sectionResult;
 }
 function analyzeTF(block){
   const baseById=new Map((block.events||[]).map(e=>[e.id,e]));
@@ -166,7 +190,7 @@ const report={
   version:'V0.1',generatedAt:new Date().toISOString(),input:INPUT,
   methodology:{
     realMarketEvidenceRequired:true,discoveryValidationOOS:'50/25/25 chronological',
-    multipleTesting:'Benjamini-Hochberg q-values across subgroup Fisher tests',
+    multipleTesting:'family BH plus global BH across all subgroup Fisher hypotheses within each section',
     fisherAlpha:ALPHA,outlierStress:'top-1/top-3 R removal',
     realExecution:false,frozenV56Touched:false,
     syntheticSignalData:false
