@@ -275,6 +275,7 @@ function eventForRanges(cs,ranges,tf) {
        maxRRTrade:(closed.length?[...closed].sort((a,b)=>b.rr-a.rr)[0]:null)?(()=>{const e=[...closed].sort((a,b)=>b.rr-a.rr)[0];return {id:e.id,rr:e.rr,r:e.r,side:e.side,t2:e.t2,t3:e.t3};})():null
      }
    };
+   audit.lookaheadAudit=M.lookaheadAudit(cs,{warmup:100,maxBars:120,minTap3Displacement:2});
    result.push(audit);
  }
  console.log(JSON.stringify({version:"V0.6",symbol:SYMBOL,source:"Binance Spot REST",maxCandles:MAX_CANDLES,pivotLen:PIVOT_LEN,minBars:MIN_BARS,maxBars:MAX_BARS,results:result},null,2));
