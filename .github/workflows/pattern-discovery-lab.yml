@@ -43,6 +43,43 @@ jobs:
           INPUT_JSON: range-${{ matrix.tf }}.json
         run: node bot/pattern-discovery-lab-v01.mjs > pattern-discovery-${{ matrix.tf }}.json
 
+      - name: Lookahead audit
+        env:
+          TF: ${{ matrix.tf }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const tf = process.env.TF;
+          const x = JSON.parse(fs.readFileSync('range-' + tf + '.json', 'utf8'));
+          const audits = (x.results || []).map(r => r.lookaheadAudit).filter(Boolean);
+          if (!audits.length) throw new Error('Missing lookaheadAudit for ' + tf);
+          const violations = audits.reduce((n, a) => n + ((a.violations || []).length), 0);
+          console.log(JSON.stringify({tf, audits: audits.length, violations}));
+          if (violations !== 0) process.exit(1);
+          NODE
+
+      - name: Global multiple-testing safety gate
+        env:
+          TF: ${{ matrix.tf }}
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const tf = process.env.TF;
+          const x = JSON.parse(fs.readFileSync('pattern-discovery-' + tf + '.json', 'utf8'));
+          for (const r of (x.results || [])) {
+            const mt = r.fullSample && r.fullSample.multipleTesting;
+            if (!mt || mt.globalBH !== true) throw new Error('Global BH metadata missing for ' + tf);
+            const families = ['direction','rr','t1ToT2','t2ToBOS','bosToT3','cross3D','climaxProxy'];
+            for (const family of families) {
+              for (const row of (r.fullSample[family] || [])) {
+                if (Number.isFinite(row.p) && (!Number.isFinite(row.globalQ) || typeof row.globalSignificant !== 'boolean')) {
+                  throw new Error('Incomplete global BH row in ' + tf + '/' + family);
+                }
+              }
+            }
+          }
+          NODE
+
       - name: Publish objective summary
         env:
           TF: ${{ matrix.tf }}
@@ -58,6 +95,8 @@ jobs:
             console.log('### '+k);
             console.log(JSON.stringify(r.fullSample[k]));
           }
+          console.log('### Multiple-testing metadata');
+          console.log(JSON.stringify(r.fullSample.multipleTesting));
           console.log('### OOS baseline');
           console.log(JSON.stringify(r.chronological.oos.baseline));
           console.log('### OOS BOS->T3');
