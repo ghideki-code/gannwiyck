@@ -1,0 +1,15 @@
+<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>GannWyck MTF Scanner tests</title><pre id="out"></pre><script src="../src/gannwyck-model1.js"></script><script src="../src/mtf-scanner.js"></script><script>
+const out=[];function ok(name,condition,detail=''){out.push(`${condition?'PASS':'FAIL'}  ${name}${detail?' - '+detail:''}`);}
+const candles=Array.from({length:120},(_,i)=>({time:i,open:100+i*.1,high:101+i*.1,low:99+i*.1,close:100.5+i*.1,volume:1000+i}));
+const r=GannWyckMTF.scan({'1h':candles,'4h':candles},{timeframes:['1h','4h']});
+ok('two timeframes',r.rows.length===2);
+ok('data quality is explicit',r.rows.every(x=>x.dataQualityScore===100));
+ok('evidence score bounded',r.rows.every(x=>x.evidenceScore>=0&&x.evidenceScore<=100));
+ok('no fabricated agent claims',!JSON.stringify(r).includes('agentes'));
+const incomplete=candles.slice();incomplete[50]={open:100,high:101,low:99,close:NaN};
+const bad=GannWyckMTF.scan({'1h':incomplete},{timeframes:['1h']});
+ok('incomplete data blocks score',bad.rows[0].dataQualityScore<100&&bad.rows[0].evidenceScore===0);
+ok('incomplete data flagged',bad.rows[0].riskFlags.includes('DADOS_INCOMPLETOS'));
+ok('invalid data cannot confirm setup',bad.confirmedSetups===0);
+document.getElementById('out').textContent=out.join('\n')+'\n\n'+(out.every(x=>x.startsWith('PASS'))?'ALL TESTS PASSED':'CHECK FAILURES');
+</script></html>
